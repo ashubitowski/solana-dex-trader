@@ -54,6 +54,18 @@ async function main() {
     // Keep track of tokens we've attempted to snipe
     const attemptedTokens = new Set<string>();
     
+    // Show current positions
+    const activePositions = snipeStrategy.getActivePositionsCount();
+    console.log(`\n📊 ACTIVE POSITIONS: ${activePositions}/3`);
+    if (activePositions > 0) {
+      console.log('\nCurrent positions:');
+      console.table(snipeStrategy.getActivePositionsSummary());
+    }
+    
+    // Scan wallet for any tokens that might be missing from our positions list
+    console.log('\n🔍 Scanning wallet for tokens from previous trades...');
+    await snipeStrategy.scanWalletForMissingPositions();
+    
     // Start monitoring for new tokens
     console.log('\n📡 Starting token monitoring...');
     
@@ -64,6 +76,12 @@ async function main() {
       // Skip if we've already tried to snipe this token
       if (attemptedTokens.has(tokenAddress)) {
         console.log(`Already attempted to snipe ${tokenAddress}, skipping`);
+        return;
+      }
+      
+      // Skip if we've already reached max positions
+      if (!snipeStrategy.canAddPosition()) {
+        console.log(`Maximum number of positions reached (3), skipping ${tokenAddress}`);
         return;
       }
       

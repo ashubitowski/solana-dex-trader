@@ -65,6 +65,8 @@ export class DexService {
     private readonly MAX_REQUESTS_PER_WINDOW = 20;
     private readonly BACKOFF_MULTIPLIER = 1.5;
     private readonly MAX_BACKOFF = 30000; // 30 seconds
+    private readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || '';
+    private readonly isUsingAlchemy = process.env.SOLANA_RPC_URL?.includes('alchemy.com') || false;
 
     // Cache for API responses
     private tokenCache: Map<string, {
@@ -88,6 +90,7 @@ export class DexService {
     }> = new Map();
     private readonly TOKEN_AGE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
     private pendingTokenRequests: Map<string, Promise<number>> = new Map();
+    private promiseResolvers: Map<string, (value: number) => void> = new Map();
     private batchTimeout: NodeJS.Timeout | null = null;
     private readonly BATCH_DELAY = 1000; // 1 second to collect requests
     private tokenBatch: Set<string> = new Set();
@@ -141,6 +144,22 @@ export class DexService {
     private async waitForRateLimit(): Promise<void> {
         const now = Date.now();
         
+        // If using Alchemy, use different rate limit settings
+        const isAlchemy = process.env.SOLANA_RPC_URL?.includes('alchemy.com') || false;
+        
+        if (isAlchemy) {
+            // Alchemy has higher rate limits but still needs some throttling
+            const minIntervalForAlchemy = 200; // 200ms between requests is reasonable for Alchemy
+            const timeSinceLastRequest = now - this.lastRequestTime;
+            
+            if (timeSinceLastRequest < minIntervalForAlchemy) {
+                await new Promise(resolve => setTimeout(resolve, minIntervalForAlchemy - timeSinceLastRequest));
+            }
+            
+            this.lastRequestTime = Date.now();
+            return;
+        }
+        
         // Reset request count if window has passed
         if (now - this.lastWindowReset >= this.RATE_LIMIT_WINDOW) {
             this.requestCount = 0;
@@ -169,16 +188,27 @@ export class DexService {
     private async retryWithBackoff<T>(fn: () => Promise<T>, retries: number = this.MAX_RETRIES): Promise<T> {
         let lastError: Error | null = null;
         let backoff = this.MIN_REQUEST_INTERVAL;
+        
+        // Adjust backoff for Alchemy
+        const isAlchemy = process.env.SOLANA_RPC_URL?.includes('alchemy.com') || false;
+        const initialBackoff = isAlchemy ? 200 : this.MIN_REQUEST_INTERVAL;
+        const maxBackoff = isAlchemy ? 10000 : this.MAX_BACKOFF; // 10 seconds max for Alchemy
+        const backoffMultiplier = isAlchemy ? 1.2 : this.BACKOFF_MULTIPLIER; // Gentler backoff for Alchemy
+        
+        backoff = initialBackoff;
 
         for (let i = 0; i < retries; i++) {
             try {
                 return await fn();
             } catch (error) {
                 lastError = error as Error;
-                if (error instanceof Error && error.message.includes('429')) {
-                    console.log(`⚠️ Rate limit hit, retrying in ${Math.ceil(backoff / 1000)} seconds...`);
+                const isRateLimit = error instanceof Error && 
+                    (error.message.includes('429') || error.message.includes('Too many requests'));
+                    
+                if (isRateLimit) {
+                    console.log(`Server responded with 429 Too Many Requests. Retrying after ${Math.ceil(backoff)}ms delay...`);
                     await new Promise(resolve => setTimeout(resolve, backoff));
-                    backoff = Math.min(backoff * this.BACKOFF_MULTIPLIER, this.MAX_BACKOFF);
+                    backoff = Math.min(backoff * backoffMultiplier, maxBackoff);
                 } else {
                     throw error;
                 }
@@ -350,145 +380,81 @@ export class DexService {
         });
     }
 
-    private async getRaydiumPools(retries = 5): Promise<any[]> {
-        // Check cache first
-        if (this.poolCache && Date.now() - this.poolCache.timestamp < this.POOL_CACHE_TTL) {
-            console.log('Using cached pool data');
-            return this.poolCache.data;
-        }
-
-        for (let i = 0; i < retries; i++) {
-            try {
-                console.log(`Attempt ${i + 1}/${retries} to fetch Raydium pools...`);
-                
-                // Try v2 API first as it's more reliable
-                const v2Response = await fetch('https://api.raydium.io/v2/main/pairs', {
-                    headers: { 
-                        'User-Agent': 'Mozilla/5.0',
-                        'Accept': 'application/json'
-                    },
-                    signal: AbortSignal.timeout(30000) // 30 second timeout using AbortSignal
-                });
-
-                if (!v2Response.ok) {
-                    throw new Error(`HTTP error! status: ${v2Response.status}`);
-                }
-
-                const v2Data = await v2Response.json();
-                console.log(`Successfully fetched ${v2Data.length} pools from v2 API`);
-                
-                // Transform the data to match our expected format
-                const transformedPools = v2Data
-                    .filter((pool: any) => {
-                        try {
-                            return pool && pool.liquidity && !isNaN(parseFloat(pool.liquidity));
-                        } catch (error) {
-                            console.warn(`Error filtering pool:`, error);
-                            return false;
-                        }
-                    })
-                    .map((pool: any) => {
-                        try {
-                            return {
-                                id: pool.ammId,
-                                tokenMint: pool.baseMint,
-                                baseMint: pool.baseMint,
-                                quoteMint: pool.quoteMint,
-                                baseSymbol: pool.baseSymbol,
-                                quoteSymbol: pool.quoteSymbol,
-                                liquidity: parseFloat(pool.liquidity),
-                                volume24h: parseFloat(pool.volume24h || '0'),
-                                price: parseFloat(pool.price || '0'),
-                                poolCount: 1
-                            };
-                        } catch (error) {
-                            console.warn(`Error transforming pool data:`, error);
-                            return null;
-                        }
-                    })
-                    .filter((pool: any) => pool !== null);
-
-                this.poolCache = {
-                    data: transformedPools,
-                    timestamp: Date.now()
-                };
-                return transformedPools;
-
-            } catch (error) {
-                console.warn(`Attempt ${i + 1}/${retries} failed:`, error);
-                if (i === retries - 1) {
-                    console.log('Using fallback hardcoded pools...');
-                    return this.getFallbackPools();
-                }
-                // Exponential backoff
-                const backoffTime = Math.pow(2, i) * 1000;
-                console.log(`Waiting ${backoffTime}ms before retry...`);
-                await new Promise(resolve => setTimeout(resolve, backoffTime));
+    private async getRaydiumPools(retries = 3): Promise<any[]> {
+        try {
+            // Check cache first
+            if (this.poolCache && Date.now() - this.poolCache.timestamp < this.POOL_CACHE_TTL) {
+                console.log('Using cached pool data');
+                return this.poolCache.data;
             }
+
+            const response = await fetch('https://api.raydium.io/v2/main/pairs', {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Raydium API returned ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const pools = data
+                .filter((pool: any) => pool && pool.liquidity && !isNaN(parseFloat(pool.liquidity)))
+                .map((pool: any) => ({
+                    id: pool.ammId,
+                    baseMint: pool.baseMint,
+                    quoteMint: pool.quoteMint,
+                    baseSymbol: pool.baseSymbol,
+                    quoteSymbol: pool.quoteSymbol,
+                    liquidity: parseFloat(pool.liquidity),
+                    volume24h: parseFloat(pool.volume24h || '0'),
+                    price: parseFloat(pool.price || '0')
+                }));
+
+            // Update cache
+            this.poolCache = {
+                data: pools,
+                timestamp: Date.now()
+            };
+
+            return pools;
+        } catch (error) {
+            console.error('Error fetching Raydium pools:', error);
+            if (retries > 0) {
+                console.log(`Retrying Raydium pools fetch (${retries} attempts remaining)...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return this.getRaydiumPools(retries - 1);
+            }
+            return this.getFallbackPools();
         }
-        return this.getFallbackPools();
     }
 
     private async getJupiterPrice(tokenMint: string): Promise<number | null> {
         try {
-            // Try Birdeye API first if available
-            if (process.env.BIRDEYE_API_KEY) {
-                try {
-                    const birdeyeResponse = await fetch(
-                        `https://public-api.birdeye.so/public/price?address=${tokenMint}`,
-                        { headers: { 'X-API-KEY': process.env.BIRDEYE_API_KEY } }
-                    );
-                    if (birdeyeResponse.ok) {
-                        const data = await birdeyeResponse.json();
-                        if (data.success && data.data?.value > 0) {
-                            console.log(`Found price from Birdeye: $${data.data.value.toFixed(6)}`);
-                            return data.data.value;
-                        }
-                    }
-                } catch (error) {
-                    console.warn('Birdeye API failed:', error);
-                }
+            const response = await fetch(`https://price.jup.ag/v4/price?ids=${tokenMint}&vsToken=So11111111111111111111111111111111111111112`);
+            if (!response.ok) {
+                throw new Error(`Jupiter API returned ${response.status}: ${response.statusText}`);
             }
-
-            // Fallback to Jupiter API
-            const response = await fetch(`https://price.jup.ag/v4/price?ids=${tokenMint}`);
-            if (!response.ok) return null;
             const data = await response.json();
             return data.data[tokenMint]?.price || null;
         } catch (error) {
-            console.warn('Error fetching price:', error);
+            console.error('Error fetching Jupiter price:', error);
             return null;
         }
     }
 
     private async getJupiterVolume(tokenMint: string): Promise<number | null> {
         try {
-            // Try Birdeye API first if available
-            if (process.env.BIRDEYE_API_KEY) {
-                try {
-                    const birdeyeResponse = await fetch(
-                        `https://public-api.birdeye.so/public/token_volume?address=${tokenMint}`,
-                        { headers: { 'X-API-KEY': process.env.BIRDEYE_API_KEY } }
-                    );
-                    if (birdeyeResponse.ok) {
-                        const data = await birdeyeResponse.json();
-                        if (data.success && data.data?.volume24h > 0) {
-                            console.log(`Found volume from Birdeye: $${data.data.volume24h.toFixed(2)}`);
-                            return data.data.volume24h;
-                        }
-                    }
-                } catch (error) {
-                    console.warn('Birdeye API failed:', error);
-                }
-            }
-
-            // Fallback to Jupiter API
             const response = await fetch(`https://stats.jup.ag/api/token/${tokenMint}`);
-            if (!response.ok) return null;
+            if (!response.ok) {
+                throw new Error(`Jupiter API returned ${response.status}: ${response.statusText}`);
+            }
             const data = await response.json();
             return data.volume24h || null;
         } catch (error) {
-            console.warn('Error fetching volume:', error);
+            console.error('Error fetching Jupiter volume:', error);
             return null;
         }
     }
@@ -515,151 +481,46 @@ export class DexService {
         }
     }
 
+    /**
+     * Get token age in days using the most efficient method available
+     */
     public async getTokenAge(tokenMint: string): Promise<number> {
+        // Check cache first
+        if (this.tokenAgeCache.has(tokenMint)) {
+            const cacheEntry = this.tokenAgeCache.get(tokenMint);
+            return cacheEntry?.age || 0;
+        }
+        
         try {
-            // Check cache first
-            const cached = this.tokenAgeCache.get(tokenMint);
-            if (cached) {
-                const age = (Date.now() - cached.timestamp) / (24 * 60 * 60 * 1000);
-                if (age < this.TOKEN_AGE_CACHE_TTL) {
-                    return cached.age;
-                }
-                this.tokenAgeCache.delete(tokenMint);
+            // For new tokens, use direct blockchain lookup
+            const mintPubkey = new PublicKey(tokenMint);
+            const signatures = await this.connection.getSignaturesForAddress(
+                mintPubkey,
+                { limit: 1 },
+                'confirmed'
+            );
+            
+            if (signatures.length === 0) {
+                return 0;
             }
-
-            // Check if there's already a pending request for this token
-            const pendingRequest = this.pendingTokenRequests.get(tokenMint);
-            if (pendingRequest) {
-                return pendingRequest;
+            
+            // Get age from oldest transaction
+            const oldestTx = signatures[signatures.length - 1];
+            if (!oldestTx.blockTime) {
+                return 0;
             }
-
-            // Create a new promise for this token
-            const promise = new Promise<number>((resolve) => {
-                // Add to batch
-                this.tokenBatch.add(tokenMint);
-
-                // Clear existing timeout if any
-                if (this.batchTimeout) {
-                    clearTimeout(this.batchTimeout);
-                }
-
-                // Set new timeout to process batch
-                this.batchTimeout = setTimeout(async () => {
-                    try {
-                        const tokens = Array.from(this.tokenBatch);
-                        this.tokenBatch.clear();
-                        
-                        // Process the batch
-                        const results = await this.processTokenBatch(tokens);
-                        
-                        // Resolve all pending promises
-                        tokens.forEach(token => {
-                            const pending = this.pendingTokenRequests.get(token);
-                            if (pending) {
-                                const result = results.get(token) || 0;
-                                (pending as any).resolve(result);
-                                this.pendingTokenRequests.delete(token);
-                            }
-                        });
-                    } catch (error) {
-                        console.warn('Error processing token batch:', error);
-                        // Resolve all pending promises with 0 in case of error
-                        Array.from(this.pendingTokenRequests.keys()).forEach(token => {
-                            const pending = this.pendingTokenRequests.get(token);
-                            if (pending) {
-                                (pending as any).resolve(0);
-                                this.pendingTokenRequests.delete(token);
-                            }
-                        });
-                    }
-                }, this.BATCH_DELAY);
-            });
-
-            // Store the promise
-            this.pendingTokenRequests.set(tokenMint, promise);
-            return promise;
+            
+            const now = Date.now() / 1000;
+            const ageInDays = (now - oldestTx.blockTime) / (24 * 60 * 60);
+            
+            // Cache the result
+            this.cacheTokenAge(tokenMint, ageInDays);
+            
+            return ageInDays;
         } catch (error) {
-            console.warn('Error in getTokenAge:', error);
+            console.warn(`Error getting token age for ${tokenMint}:`, error);
             return 0;
         }
-    }
-
-    private async processTokenBatch(tokens: string[]): Promise<Map<string, number>> {
-        const results = new Map<string, number>();
-        
-        // Split tokens into chunks of 100 (Helius API limit)
-        const chunkSize = 100;
-        for (let i = 0; i < tokens.length; i += chunkSize) {
-            const chunk = tokens.slice(i, i + chunkSize);
-            
-            try {
-                console.log(`Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(tokens.length / chunkSize)}...`);
-                
-                const heliusResponse = await fetch(
-                    `https://api.helius.xyz/v0/token-metadata?api-key=${process.env.HELIUS_API_KEY}`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            mintAccounts: chunk
-                        })
-                    }
-                );
-                
-                if (!heliusResponse.ok) {
-                    throw new Error(`Helius API error: ${heliusResponse.status} ${heliusResponse.statusText}`);
-                }
-
-                const data = await heliusResponse.json();
-                
-                // Process each token in the response
-                for (const tokenData of data) {
-                    try {
-                        const tokenMint = tokenData.account;
-                        if (tokenData.onChainAccountInfo?.accountInfo?.data?.parsed?.info?.supply) {
-                            // For new tokens, use blockchain lookup to get exact age
-                            const mintPubkey = new PublicKey(tokenMint);
-                            const signatures = await this.connection.getSignaturesForAddress(
-                                mintPubkey,
-                                { limit: 1 },
-                                'confirmed'
-                            );
-
-                            let ageInDays = 0.1; // Default to new token
-                            if (signatures && signatures.length > 0) {
-                                const oldestTx = signatures[signatures.length - 1];
-                                if (oldestTx.blockTime) {
-                                    const now = Date.now() / 1000;
-                                    ageInDays = (now - oldestTx.blockTime) / (24 * 60 * 60);
-                                }
-                            }
-                            
-                            results.set(tokenMint, ageInDays);
-                            this.cacheTokenAge(tokenMint, ageInDays);
-                        } else {
-                            results.set(tokenMint, 0);
-                        }
-                    } catch (error) {
-                        console.warn(`Error processing token ${tokenData.account}:`, error);
-                        results.set(tokenData.account, 0);
-                    }
-                }
-            } catch (error) {
-                console.warn('Error processing token chunk:', error);
-                // Set all tokens in chunk to 0 on error
-                chunk.forEach(token => results.set(token, 0));
-            }
-
-            // Add a small delay between chunks to avoid rate limits
-            if (i + chunkSize < tokens.length) {
-                console.log('Waiting before next chunk...');
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-
-        return results;
     }
 
     public async getTokenMetrics(mintAddress: string): Promise<TokenMetrics> {
@@ -788,7 +649,7 @@ export class DexService {
             let totalVolume = 0;
             
             for (const pool of tokenPools) {
-                const poolLiquidity = parseFloat(pool.liquidity || pool.tvl || '0');
+                const poolLiquidity = parseFloat(pool.liquidity || '0');
                 if (poolLiquidity > 0) {
                     totalLiquidity += poolLiquidity;
                     const poolPrice = parseFloat(pool.price || '0');
@@ -868,58 +729,38 @@ export class DexService {
     }
 
     public async getTokenLiquidity(tokenAddress: string): Promise<number> {
-        return this.enqueueRequest(async () => {
-            try {
-                console.log(`Checking liquidity for token ${tokenAddress}...`);
-                
-                // Try Raydium pools first
-                const pools = await this.getRaydiumPools();
-                const tokenPools = pools.filter(pool => 
-                    pool.baseMint === tokenAddress || pool.quoteMint === tokenAddress
-                );
-
-                if (tokenPools.length > 0) {
-                    let totalLiquidity = 0;
-                    for (const pool of tokenPools) {
-                        const poolLiquidity = parseFloat(pool.liquidity || pool.tvl || '0');
-                        // Remove the liquidity range check to be less restrictive
-                        if (!isNaN(poolLiquidity) && poolLiquidity > 0) {
-                            totalLiquidity += poolLiquidity;
-                        }
-                    }
-
-                    if (totalLiquidity > 0) {
-                        console.log(`Found Raydium liquidity: ${totalLiquidity.toFixed(2)} SOL`);
-                        return totalLiquidity;
-                    }
+        try {
+            // Try Jupiter API first
+            const jupiterPrice = await this.getJupiterPrice(tokenAddress);
+            if (jupiterPrice && jupiterPrice > 0) {
+                const jupiterVolume = await this.getJupiterVolume(tokenAddress);
+                if (jupiterVolume && jupiterVolume > 0) {
+                    // If we have both price and volume from Jupiter, estimate liquidity
+                    const estimatedLiquidity = jupiterVolume / (jupiterPrice * 2);
+                    console.log(`Estimated liquidity from Jupiter for ${tokenAddress}: ${estimatedLiquidity} SOL`);
+                    return estimatedLiquidity;
                 }
-
-                // Try Birdeye API if available
-                if (process.env.BIRDEYE_API_KEY) {
-                    try {
-                        const birdeyeResponse = await fetch(
-                            `https://public-api.birdeye.so/public/token_list?address=${tokenAddress}`,
-                            { headers: { 'X-API-KEY': process.env.BIRDEYE_API_KEY } }
-                        );
-                        if (birdeyeResponse.ok) {
-                            const data = await birdeyeResponse.json();
-                            if (data.success && data.data?.[0]?.liquidity > 0) {
-                                const liquidity = data.data[0].liquidity;
-                                console.log(`Found Birdeye liquidity: ${liquidity.toFixed(2)} SOL`);
-                                return liquidity;
-                            }
-                        }
-                    } catch (error) {
-                        console.warn('Birdeye API failed:', error);
-                    }
-                }
-
-                return 0;
-            } catch (error) {
-                console.warn('Error getting token liquidity:', error);
-                return 0;
             }
-        });
+
+            // Try Raydium pools as fallback
+            const pools = await this.getRaydiumPools(3); // Reduced retries for faster checks
+            const tokenPools = pools.filter(pool => 
+                pool.baseMint === tokenAddress || pool.quoteMint === tokenAddress
+            );
+
+            if (tokenPools.length > 0) {
+                const totalLiquidity = tokenPools.reduce((sum, pool) => sum + (pool.liquidity || 0), 0);
+                console.log(`Found ${tokenPools.length} Raydium pools for ${tokenAddress} with total liquidity: ${totalLiquidity} SOL`);
+                return totalLiquidity;
+            }
+
+            // If no liquidity found, return 0
+            console.log(`No liquidity found for token ${tokenAddress}`);
+            return 0;
+        } catch (error) {
+            console.error('Error checking token liquidity:', error);
+            return 0;
+        }
     }
 
     public async getTokenPrice(tokenAddress: string): Promise<number> {
@@ -1014,6 +855,55 @@ export class DexService {
         } catch (error) {
             console.error('Error getting token balance:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Get all tokens owned by the wallet with non-zero balances
+     * @returns Array of token information including address, balance and metadata
+     */
+    async getAllWalletTokens(): Promise<Array<{
+        address: string;
+        balance: number;
+        info: TokenInfo | null;
+    }>> {
+        try {
+            console.log('Fetching all token balances for wallet...');
+            const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
+                this.walletService.getKeypair().publicKey,
+                { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
+            );
+            
+            const result = [];
+            
+            for (const account of tokenAccounts.value) {
+                const parsedInfo = account.account.data.parsed.info;
+                const tokenAddress = parsedInfo.mint;
+                const balance = parsedInfo.tokenAmount.uiAmount;
+                
+                // Skip tokens with zero balance
+                if (balance === 0) continue;
+                
+                // Get token metadata if possible
+                let tokenInfo = null;
+                try {
+                    tokenInfo = await this.getTokenInfo(tokenAddress);
+                } catch (error) {
+                    console.warn(`Could not fetch token info for ${tokenAddress}`);
+                }
+                
+                result.push({
+                    address: tokenAddress,
+                    balance,
+                    info: tokenInfo
+                });
+            }
+            
+            console.log(`Found ${result.length} tokens with non-zero balances in wallet`);
+            return result;
+        } catch (error) {
+            console.error('Error getting all wallet tokens:', error);
+            return [];
         }
     }
 

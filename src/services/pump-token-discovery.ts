@@ -3,50 +3,67 @@ import { DexService } from './dex';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { WalletService } from './wallet';
 
 dotenv.config();
 
 interface TokenData {
   address: string;
-  timestamp: number;
-  validatedLiquidity: boolean;
+  symbol: string;
+  name: string;
+}
+
+interface BirdeyeToken {
+  address: string;
+  symbol: string;
+  name: string;
+}
+
+// Add interface for raw API response token data
+interface BirdeyeApiResponse {
+  data: {
+    tokens: Array<{
+      address?: string;
+      symbol?: string;
+      name?: string;
+      [key: string]: any;
+    }>;
+  };
+}
+
+// Add this interface at the file level
+interface TokenResult {
+  address: string;
+  symbol: string;
+  name: string;
 }
 
 export class PumpTokenDiscovery {
   private connection: Connection;
   private dexService: DexService;
   private isScanning: boolean = false;
-  private readonly scanInterval: number = 1000; // Reduced to 1 second for faster pump token discovery
-  private readonly minLiquidityThreshold: number = Number(process.env.MIN_LIQUIDITY_THRESHOLD || '1'); // Reduced to 1 SOL for pump tokens
-  private lastScanBlockHeight: number = 0;
-  private knownTokensCache: Set<string> = new Set();
+  private scanInterval: number = 5000; // 5 seconds
+  private minLiquidityThreshold: number;
+  private readonly EXCLUDED_TOKENS: Set<string>;
+  private knownTokensCache: Set<string>;
   private readonly TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
   private readonly CACHE_FILE_PATH = path.join(process.cwd(), '.cache/pump_tokens.json');
+  private readonly BIRDEYE_API_KEY = process.env.BIRDEYE_API_KEY || '';
   
-  // Common tokens to exclude from sniping - these are well-established tokens
-  private readonly EXCLUDED_TOKENS = new Set<string>([
-    'So11111111111111111111111111111111111111112', // SOL
-    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj', // stSOL
-    'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', // mSOL
-    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
-    'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // BONK
-    'DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ', // DUST
-    'AFbX8oGjGpmVFywbVouvhQSRmiW2aR1mohfahi4Y2AdB', // GST
-    '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU', // SAMO
-    '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', // RAY
-    'kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6', // KIN
-    'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', // PYTH
-    'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1', // bSOL
-    'DFL1zNkaGPWm1BwrQXq4ewV6VC37WJ8DkD61YqD6U9ay', // wBTC
-    '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E', // BTC
-    '2FPyTwcZLUg1MDrwsyoP4D6s1tM7hAkHYRjkNb5w6Pxk', // ETH
-    'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz', // wETH
-  ]);
+  // Token age filtering parameters
+  private readonly MIN_TOKEN_AGE_HOURS = Number(process.env.MIN_TOKEN_AGE_HOURS || '24'); // Minimum age in hours (default 24h)
+  private readonly MAX_TOKEN_AGE_HOURS = Number(process.env.MAX_TOKEN_AGE_HOURS || '72'); // Maximum age in hours (default 72h)
   
-  constructor(connection: Connection, dexService: DexService) {
-    this.connection = connection;
-    this.dexService = dexService;
+  constructor() {
+    this.connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
+    const walletService = new WalletService();
+    this.dexService = new DexService(this.connection, walletService);
+    this.minLiquidityThreshold = parseFloat(process.env.MIN_LIQUIDITY_THRESHOLD || '5');
+    this.EXCLUDED_TOKENS = new Set([
+      'So11111111111111111111111111111111111111112', // SOL
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' // USDC
+    ]);
+    this.knownTokensCache = new Set();
     this.loadCache();
   }
   
@@ -59,16 +76,13 @@ export class PumpTokenDiscovery {
       if (fs.existsSync(this.CACHE_FILE_PATH)) {
         const cache = JSON.parse(fs.readFileSync(this.CACHE_FILE_PATH, 'utf8'));
         this.knownTokensCache = new Set(cache.tokens || []);
-        this.lastScanBlockHeight = cache.lastBlockHeight || 0;
         console.log(`Loaded ${this.knownTokensCache.size} known pump tokens`);
-        console.log(`Last scan block height: ${this.lastScanBlockHeight}`);
       } else {
         console.log('No pump token cache found, starting fresh');
       }
     } catch (error) {
       console.error('Error loading token cache:', error);
       this.knownTokensCache = new Set();
-      this.lastScanBlockHeight = 0;
     }
   }
   
@@ -78,7 +92,6 @@ export class PumpTokenDiscovery {
         this.CACHE_FILE_PATH,
         JSON.stringify({
           tokens: Array.from(this.knownTokensCache),
-          lastBlockHeight: this.lastScanBlockHeight,
           lastUpdate: new Date().toISOString()
         }, null, 2)
       );
@@ -96,14 +109,6 @@ export class PumpTokenDiscovery {
     this.isScanning = true;
     console.log('🔍 Starting pump token monitoring...');
     
-    // Start from current slot if no previous data
-    if (this.lastScanBlockHeight === 0) {
-      const slot = await this.connection.getSlot();
-      this.lastScanBlockHeight = await this.connection.getBlockHeight();
-      this.saveCache();
-      console.log(`Starting from block height: ${this.lastScanBlockHeight}`);
-    }
-    
     // Use multiple sources to find new tokens
     let lastCheckTime = Date.now();
     
@@ -111,46 +116,35 @@ export class PumpTokenDiscovery {
       if (!this.isScanning) return;
       
       try {
-        // Update the block height for logging
-        const currentBlockHeight = await this.connection.getBlockHeight();
+        // Method 1: Check Jupiter token list (good for established tokens)
+        const jupiterTokens = await this.checkJupiterTokens();
         
-        if (currentBlockHeight > this.lastScanBlockHeight) {
-          console.log(`Scanning for new tokens (blocks ${this.lastScanBlockHeight} to ${currentBlockHeight})`);
+        // Method 2: Check pump.fun API for latest tokens (direct source)
+        const pumpFunTokens = await this.checkPumpFunTokens();
+        
+        // Method 3: Check Birdeye for newest tokens (if API key is available)
+        const birdeyeTokens = await this.checkBirdeyeTokens();
+        
+        // Combine results from all sources
+        const allNewTokens = [...jupiterTokens, ...pumpFunTokens, ...birdeyeTokens];
+        
+        // Process new tokens
+        for (const token of allNewTokens) {
+          // Add to known tokens cache
+          this.knownTokensCache.add(token.address);
           
-          // Method 1: Check Jupiter token list (good for established tokens)
-          const jupiterTokens = await this.checkJupiterTokens();
-          
-          // Method 2: Check pump.fun API for latest tokens (direct source)
-          const pumpFunTokens = await this.checkPumpFunTokens();
-          
-          // Combine results from both sources
-          const allNewTokens = [...jupiterTokens, ...pumpFunTokens];
-          
-          // Process new tokens
-          for (const token of allNewTokens) {
-            // Add to known tokens cache
-            this.knownTokensCache.add(token.address);
+          try {
+            // Quick validation to ensure it's a real token
+            const isValid = await this.quickValidateToken(token.address);
             
-            try {
-              // Quick validation to ensure it's a real token
-              const isValid = await this.quickValidateToken(token.address);
-              
-              if (isValid) {
-                console.log(`🔔 New token detected: ${token.address} (${token.symbol || 'Unknown'} - ${token.name || 'Unknown'})`);
-                // Call the callback with the new token
-                await callback(token.address);
-              }
-            } catch (tokenError) {
-              console.warn(`Error validating token ${token.address}:`, tokenError);
+            if (isValid) {
+              console.log(`🔔 New token detected: ${token.address} (${token.symbol} - ${token.name})`);
+              // Call the callback with the new token
+              await callback(token.address);
             }
+          } catch (tokenError) {
+            console.warn(`Error validating token ${token.address}:`, tokenError);
           }
-          
-          // Update last scanned block height
-          this.lastScanBlockHeight = currentBlockHeight;
-          this.saveCache();
-          lastCheckTime = Date.now();
-        } else {
-          console.log(`No new blocks since last scan (current: ${currentBlockHeight})`);
         }
         
         // Schedule next scan
@@ -245,6 +239,63 @@ export class PumpTokenDiscovery {
     }
   }
   
+  private async checkBirdeyeTokens(): Promise<TokenData[]> {
+    try {
+      const birdeyeApiKey = process.env.BIRDEYE_API_KEY;
+      if (!birdeyeApiKey) {
+        console.warn('BIRDEYE_API_KEY not set, skipping Birdeye token check');
+        return [];
+      }
+
+      const response = await fetch('https://public-api.birdeye.so/defi/new_tokens?chain=solana&offset=0&limit=100', {
+        headers: {
+          'X-API-KEY': birdeyeApiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || '5';
+          console.log(`Rate limited by Birdeye API. Waiting ${retryAfter} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000));
+          return this.checkBirdeyeTokens(); // Retry the request
+        }
+        if (response.status === 404) {
+          // Silently skip 404 errors as they're expected when no new tokens are found
+          return [];
+        }
+        console.warn(`Birdeye API returned ${response.status}: ${response.statusText}`);
+        return [];
+      }
+
+      const data = await response.json();
+      if (!data?.data?.tokens || !Array.isArray(data.data.tokens)) {
+        throw new Error('Invalid response from Birdeye API');
+      }
+
+      const tokens: TokenData[] = data.data.tokens
+        .filter((token: BirdeyeToken) => 
+          token.address && 
+          token.symbol && 
+          token.name &&
+          !this.knownTokensCache.has(token.address) &&
+          !this.EXCLUDED_TOKENS.has(token.address)
+        )
+        .map((token: BirdeyeToken) => ({
+          address: token.address,
+          symbol: token.symbol,
+          name: token.name
+        }));
+
+      console.log(`Found ${tokens.length} new tokens from Birdeye`);
+      return tokens;
+    } catch (error) {
+      console.error('Error checking Birdeye tokens:', error);
+      return [];
+    }
+  }
+  
   public stopMonitoring(): void {
     this.isScanning = false;
     console.log('Pump token monitoring stopped');
@@ -253,6 +304,11 @@ export class PumpTokenDiscovery {
   
   private async quickValidateToken(mintAddress: string): Promise<boolean> {
     try {
+      // Skip validation for excluded tokens - they're already valid
+      if (this.EXCLUDED_TOKENS.has(mintAddress)) {
+        return true;
+      }
+      
       console.log(`Validating token: ${mintAddress}`);
       
       // 1. Basic validation - check it's a real account
@@ -265,7 +321,15 @@ export class PumpTokenDiscovery {
           return false;
         }
         
-        const mintInfo = await this.connection.getAccountInfo(publicKey);
+        // Use more efficient account info fetching with smaller commitment
+        // This is faster with Alchemy's optimized RPC
+        const isAlchemy = process.env.SOLANA_RPC_URL?.includes('alchemy.com') || false;
+        
+        const mintInfo = await this.connection.getAccountInfo(
+          publicKey, 
+          { commitment: 'confirmed' } // Using confirmed as it's a valid commitment
+        );
+        
         if (!mintInfo || !mintInfo.data) {
           console.log(`${mintAddress}: Invalid token account - no data found`);
           return false;
@@ -277,6 +341,28 @@ export class PumpTokenDiscovery {
           return false;
         }
         
+        // 2. Check token age to ensure it falls within our target window
+        try {
+          // Get the token's age in hours
+          const tokenAgeHours = await this.getTokenAgeInHours(mintAddress);
+          
+          // Check if the token age is within our target window
+          if (tokenAgeHours < this.MIN_TOKEN_AGE_HOURS) {
+            console.log(`${mintAddress}: Token too new (${tokenAgeHours.toFixed(2)} hours), minimum is ${this.MIN_TOKEN_AGE_HOURS} hours`);
+            return false;
+          }
+          
+          if (tokenAgeHours > this.MAX_TOKEN_AGE_HOURS) {
+            console.log(`${mintAddress}: Token too old (${tokenAgeHours.toFixed(2)} hours), maximum is ${this.MAX_TOKEN_AGE_HOURS} hours`);
+            return false;
+          }
+          
+          console.log(`${mintAddress}: Token age check passed (${tokenAgeHours.toFixed(2)} hours)`);
+        } catch (ageError) {
+          console.warn(`${mintAddress}: Error checking token age:`, ageError);
+          // Continue with validation even if age check fails
+        }
+        
         // For pump tokens, we'll skip the suspicious name check since many pump tokens
         // intentionally have funny/scammy-sounding names
         return true;
@@ -284,12 +370,63 @@ export class PumpTokenDiscovery {
         console.log(`${mintAddress}: Error checking token account`);
         return false;
       }
-      
-      console.log(`${mintAddress}: Validation passed - appears to be a valid token`);
-      return true;
     } catch (error) {
       console.error(`Error validating token ${mintAddress}:`, error);
       return false;
+    }
+  }
+  
+  /**
+   * Get the token's age in hours by checking its first transaction
+   */
+  private async getTokenAgeInHours(mintAddress: string): Promise<number> {
+    try {
+      // Try to get the token age from our DexService if available
+      try {
+        // The DexService now uses Alchemy's optimized methods when available
+        const tokenAgeDays = await this.dexService.getTokenAge(mintAddress);
+        if (tokenAgeDays > 0) {
+          // Convert days to hours
+          const ageInHours = tokenAgeDays * 24;
+          console.log(`Found token age for ${mintAddress} using optimized methods: ${ageInHours.toFixed(2)} hours`);
+          return ageInHours;
+        }
+      } catch (dexError) {
+        console.warn(`Failed to get token age from DexService: ${dexError}`);
+        // Continue with fallback method
+      }
+      
+      // Fallback method: Check the mint account's transaction history
+      // This is more efficient with Alchemy due to their optimized transaction history endpoints
+      const isAlchemy = process.env.SOLANA_RPC_URL?.includes('alchemy.com') || false;
+      const limit = isAlchemy ? 3 : 1; // Get slightly more signatures with Alchemy for better reliability
+      
+      const mintPubkey = new PublicKey(mintAddress);
+      const signatures = await this.connection.getSignaturesForAddress(
+        mintPubkey,
+        { limit },
+        'confirmed' // Using confirmed as it's a valid Finality value
+      );
+
+      if (signatures && signatures.length > 0) {
+        // Get the oldest signature in our list
+        const oldestTx = signatures[signatures.length - 1];
+        if (oldestTx.blockTime) {
+          const nowSeconds = Date.now() / 1000;
+          const ageInSeconds = nowSeconds - oldestTx.blockTime;
+          const hours = ageInSeconds / 3600;
+          console.log(`Found token age for ${mintAddress} using transaction history: ${hours.toFixed(2)} hours`);
+          return hours; // Convert seconds to hours
+        }
+      }
+      
+      // If we couldn't determine the age, return a very large number to fail the filter
+      console.log(`Could not determine age for token ${mintAddress}`);
+      return Number.MAX_SAFE_INTEGER;
+    } catch (error) {
+      console.error(`Error getting token age for ${mintAddress}:`, error);
+      // If we can't determine the age, return a very large number to fail the filter
+      return Number.MAX_SAFE_INTEGER;
     }
   }
   
@@ -303,22 +440,12 @@ export class PumpTokenDiscovery {
     }
     
     const startTime = Date.now();
-    let liquidityFound = false;
     
-    // Poll in a loop with exponential backoff
-    let delay = 2000; // Start with 2 seconds
-    const maxDelay = 15000; // Max 15 seconds
-    
-    // First quick check for liquidity
+    // Quick check methods first - these are faster but less reliable
     try {
-      const liquidity = await this.dexService.getTokenLiquidity(mintAddress);
-      if (liquidity >= this.minLiquidityThreshold) {
-        console.log(`✅ ${mintAddress}: Immediate liquidity found (${liquidity} SOL)`);
-        return true;
-      }
-      
-      // For pump tokens, also try a quick quote check since some DEXes might not report liquidity correctly
+      // Method 1: Fast initial check using Jupiter quote
       try {
+        console.log(`Attempting quick liquidity check via Jupiter quote for ${mintAddress}`);
         const quoteResult = await this.dexService.getQuote(
           'So11111111111111111111111111111111111111112', // SOL
           mintAddress, 
@@ -326,31 +453,63 @@ export class PumpTokenDiscovery {
         );
         
         if (quoteResult) {
-          console.log(`✅ ${mintAddress}: Quote available, expected output: ${quoteResult.outAmount} tokens`);
+          console.log(`✅ ${mintAddress}: Quote available immediately, expected output: ${quoteResult.outAmount} tokens`);
           return true;
         }
       } catch (quoteError) {
-        // Ignore quote errors
+        // Ignore quote errors, continue to next check
       }
-    } catch (error) {
-      console.warn(`Error during initial liquidity check for ${mintAddress}:`, error);
+      
+      // Method 2: Direct liquidity check
+      try {
+        console.log(`Attempting direct liquidity check for ${mintAddress}`);
+        const liquidity = await this.dexService.getTokenLiquidity(mintAddress);
+        if (liquidity >= this.minLiquidityThreshold) {
+          console.log(`✅ ${mintAddress}: Immediate liquidity found (${liquidity} SOL)`);
+          return true;
+        }
+      } catch (liquidityError) {
+        // Ignore liquidity check errors, continue to polling
+      }
+      
+      // Method 3: Try to get token price - if it has a price, it has liquidity
+      try {
+        console.log(`Checking if token ${mintAddress} has a price`);
+        const price = await this.dexService.getTokenPrice(mintAddress);
+        if (price > 0) {
+          console.log(`✅ ${mintAddress}: Token has a price (${price}), assuming it has liquidity`);
+          return true;
+        }
+      } catch (priceError) {
+        // Ignore price check errors, continue to polling
+      }
+    } catch (fastCheckError) {
+      console.warn(`Error during fast liquidity checks: ${fastCheckError}`);
     }
     
-    console.log(`Initial liquidity check failed, starting polling...`);
+    console.log(`Initial liquidity checks failed for ${mintAddress}, starting polling...`);
     
-    while (Date.now() - startTime < maxWaitTimeMs) {
+    // Poll in a loop with exponential backoff
+    let delay = 2000; // Start with 2 seconds
+    const maxDelay = 15000; // Max 15 seconds
+    let attempts = 0;
+    const maxAttempts = 10; // Maximum 10 polling attempts
+    
+    while (Date.now() - startTime < maxWaitTimeMs && attempts < maxAttempts) {
+      attempts++;
+      console.log(`Liquidity check attempt ${attempts}/${maxAttempts} for ${mintAddress}`);
+      
       try {
-        // Check if liquidity exists
+        // Try method 1: Check direct liquidity
         const liquidity = await this.dexService.getTokenLiquidity(mintAddress);
         console.log(`${mintAddress}: Current liquidity: ${liquidity} SOL`);
         
         if (liquidity >= this.minLiquidityThreshold) {
           console.log(`✅ ${mintAddress}: Sufficient liquidity found (${liquidity} SOL)`);
-          liquidityFound = true;
-          break;
+          return true;
         }
         
-        // Try a simple Jupiter quote check as an alternative way to detect tradability
+        // Try method 2: Jupiter quote check
         try {
           const quoteResult = await this.dexService.getQuote(
             'So11111111111111111111111111111111111111112', // SOL
@@ -360,14 +519,41 @@ export class PumpTokenDiscovery {
           
           if (quoteResult) {
             console.log(`✅ ${mintAddress}: Quote available, token appears tradable`);
-            liquidityFound = true;
-            break;
+            return true;
           }
         } catch (quoteError) {
           // Ignore quote errors, continue checking
         }
         
-        // Wait before checking again
+        // Try method 3: Check if token has a price
+        try {
+          const price = await this.dexService.getTokenPrice(mintAddress);
+          if (price > 0) {
+            console.log(`✅ ${mintAddress}: Token has a price (${price}), assuming it has liquidity`);
+            return true;
+          }
+        } catch (priceError) {
+          // Ignore price errors, continue checking
+        }
+        
+        // If we've used most of our time allocation, try one last method - direct Jupiter swap quote
+        if (Date.now() - startTime > (maxWaitTimeMs * 0.7)) {
+          try {
+            // Try a final direct Jupiter API call
+            const response = await fetch(`https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${mintAddress}&amount=10000000&slippageBps=50`);
+            const data = await response.json();
+            
+            if (data && data.outAmount && Number(data.outAmount) > 0) {
+              console.log(`✅ ${mintAddress}: Direct Jupiter API response indicates liquidity`);
+              return true;
+            }
+          } catch (jupiterError) {
+            // Last attempt failed, continue to next loop iteration
+          }
+        }
+        
+        // Wait before checking again with exponential backoff
+        console.log(`Waiting ${delay/1000} seconds before next liquidity check for ${mintAddress}`);
         await new Promise(resolve => setTimeout(resolve, delay));
         
         // Exponential backoff with max cap
@@ -379,10 +565,7 @@ export class PumpTokenDiscovery {
       }
     }
     
-    if (!liquidityFound) {
-      console.log(`⚠️ ${mintAddress}: No liquidity found after ${maxWaitTimeMs/1000} seconds`);
-    }
-    
-    return liquidityFound;
+    console.log(`⚠️ ${mintAddress}: No liquidity found after ${attempts} attempts and ${(Date.now() - startTime)/1000} seconds`);
+    return false;
   }
 } 

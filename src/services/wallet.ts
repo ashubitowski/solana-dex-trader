@@ -1,50 +1,95 @@
-import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction, Keypair, LogsCallback } from '@solana/web3.js';
 import bs58 from 'bs58';
 import dotenv from 'dotenv';
+import { WebSocketWrapper } from './websocket-wrapper';
 
 dotenv.config();
 
 export class WalletService {
-    private connection: Connection;
-    private keypair: Keypair;
+    private connection!: Connection;
+    private keypair!: Keypair;
+    private wsConnected: boolean = false;
+    private webSocketWrapper: WebSocketWrapper | null = null;
+    private reconnectAttempts: number = 0;
+    private readonly maxReconnectAttempts: number = 5;
 
     constructor() {
-        const network = process.env.SOLANA_NETWORK || 'devnet';
-        const rpcUrl = process.env.SOLANA_RPC_URL || (
-            network === 'mainnet-beta' 
-                ? 'https://api.mainnet-beta.solana.com'
-                : network === 'testnet'
-                    ? 'https://api.testnet.solana.com'
-                    : 'https://api.devnet.solana.com'
-        );
-                
-        this.connection = new Connection(rpcUrl, {
-            commitment: 'confirmed',
-            confirmTransactionInitialTimeout: 60000
-        });
-        
-        const privateKeyString = process.env.SOLANA_PRIVATE_KEY;
-        if (!privateKeyString) {
-            throw new Error('SOLANA_PRIVATE_KEY is not set in .env file');
+        this.initializeConnection();
+    }
+
+    private async initializeConnection(): Promise<void> {
+        try {
+            const rpcUrl = process.env.SOLANA_RPC_URL;
+            if (!rpcUrl) {
+                throw new Error('SOLANA_RPC_URL is not set in environment variables');
+            }
+
+            // Initialize keypair first
+            const privateKeyString = process.env.SOLANA_PRIVATE_KEY;
+            if (!privateKeyString) {
+                throw new Error('SOLANA_PRIVATE_KEY is not set in environment variables');
+            }
+            const privateKey = bs58.decode(privateKeyString);
+            this.keypair = Keypair.fromSecretKey(privateKey);
+
+            // Create connection with websocket configuration
+            const wsEndpoint = rpcUrl.replace('https://', 'wss://');
+            console.log('Connecting to WebSocket endpoint:', wsEndpoint);
+
+            this.connection = new Connection(rpcUrl, {
+                commitment: 'confirmed',
+                wsEndpoint: wsEndpoint,
+                confirmTransactionInitialTimeout: 60000,
+                disableRetryOnRateLimit: false
+            });
+
+            // Initialize WebSocket wrapper
+            this.webSocketWrapper = new WebSocketWrapper(this.connection);
+
+            // Set up logs subscription
+            await this.setupLogsSubscription();
+        } catch (error) {
+            console.error('Error initializing connection:', error);
+            throw error;
         }
+    }
+
+    private async setupLogsSubscription(): Promise<void> {
+        if (!this.webSocketWrapper) {
+            throw new Error('WebSocket wrapper not initialized');
+        }
+
+        await this.webSocketWrapper.subscribe(
+            this.keypair.publicKey,
+            (logs) => {
+                // Handle valid logs here
+                // This callback will only receive non-error logs
+                // as errors are handled by the wrapper
+            }
+        );
+
+        this.wsConnected = true;
+    }
+
+    private async handleWebSocketError(): Promise<void> {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('Max reconnection attempts reached. Please restart the application.');
+            return;
+        }
+
+        this.reconnectAttempts++;
+        console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
         
         try {
-            // Remove any whitespace or newlines from the private key
-            const cleanPrivateKey = privateKeyString.trim();
-            
-            // Try to decode as base58
-            const privateKeyBytes = bs58.decode(cleanPrivateKey);
-            
-            // Verify the length is correct (should be 64 bytes for a Solana private key)
-            if (privateKeyBytes.length !== 64) {
-                throw new Error('Invalid private key length. Expected 64 bytes.');
-            }
-            
-            this.keypair = Keypair.fromSecretKey(privateKeyBytes);
-            console.log('Wallet initialized with public key:', this.keypair.publicKey.toString());
+            await this.connect();
+            this.wsConnected = true;
+            this.reconnectAttempts = 0;
+            console.log('Successfully reconnected to WebSocket');
         } catch (error) {
-            console.error('Error initializing wallet:', error);
-            throw new Error('Invalid private key format. Please ensure it is a valid base58 encoded string.');
+            console.error('Failed to reconnect:', error);
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                await this.handleWebSocketError();
+            }
         }
     }
 
@@ -75,16 +120,27 @@ export class WalletService {
                 }
             }
             
+            this.wsConnected = true;
             return true;
         } catch (error) {
             console.error('Error connecting to Solana network:', error);
+            this.wsConnected = false;
             return false;
         }
     }
 
     async disconnect(): Promise<void> {
-        // No need to disconnect when using a keypair
-        console.log('Wallet disconnected');
+        try {
+            if (this.webSocketWrapper) {
+                await this.webSocketWrapper.unsubscribe(this.keypair.publicKey);
+                this.webSocketWrapper.cleanup();
+                this.webSocketWrapper = null;
+            }
+            this.wsConnected = false;
+            console.log('Wallet disconnected');
+        } catch (error) {
+            console.error('Error disconnecting wallet:', error);
+        }
     }
 
     getPublicKey(): PublicKey {
@@ -107,5 +163,9 @@ export class WalletService {
 
     getKeypair(): Keypair {
         return this.keypair;
+    }
+
+    isWebSocketConnected(): boolean {
+        return this.webSocketWrapper?.isWebSocketConnected() || false;
     }
 } 
