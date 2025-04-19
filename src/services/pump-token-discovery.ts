@@ -16,8 +16,8 @@ export class PumpTokenDiscovery {
   private connection: Connection;
   private dexService: DexService;
   private isScanning: boolean = false;
-  private readonly scanInterval: number = 2000; // milliseconds between scans - faster for pump tokens
-  private readonly minLiquidityThreshold: number = Number(process.env.MIN_LIQUIDITY_THRESHOLD || '5'); // Lower threshold for pump tokens
+  private readonly scanInterval: number = 1000; // Reduced to 1 second for faster pump token discovery
+  private readonly minLiquidityThreshold: number = Number(process.env.MIN_LIQUIDITY_THRESHOLD || '1'); // Reduced to 1 SOL for pump tokens
   private lastScanBlockHeight: number = 0;
   private knownTokensCache: Set<string> = new Set();
   private readonly TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -104,10 +104,12 @@ export class PumpTokenDiscovery {
       console.log(`Starting from block height: ${this.lastScanBlockHeight}`);
     }
     
-    // Let's use a simpler approach - check for new token accounts on Jupiter
+    // Use multiple sources to find new tokens
     let lastCheckTime = Date.now();
     
-    while (this.isScanning) {
+    const scanForTokens = async () => {
+      if (!this.isScanning) return;
+      
       try {
         // Update the block height for logging
         const currentBlockHeight = await this.connection.getBlockHeight();
@@ -115,16 +117,103 @@ export class PumpTokenDiscovery {
         if (currentBlockHeight > this.lastScanBlockHeight) {
           console.log(`Scanning for new tokens (blocks ${this.lastScanBlockHeight} to ${currentBlockHeight})`);
           
-          try {
-            // Use Jupiter token list which is regularly updated
-            const response = await fetch('https://token.jup.ag/all');
-            const allTokens = await response.json() as Array<{address: string, symbol: string, name: string}>;
+          // Method 1: Check Jupiter token list (good for established tokens)
+          const jupiterTokens = await this.checkJupiterTokens();
+          
+          // Method 2: Check pump.fun API for latest tokens (direct source)
+          const pumpFunTokens = await this.checkPumpFunTokens();
+          
+          // Combine results from both sources
+          const allNewTokens = [...jupiterTokens, ...pumpFunTokens];
+          
+          // Process new tokens
+          for (const token of allNewTokens) {
+            // Add to known tokens cache
+            this.knownTokensCache.add(token.address);
             
-            console.log(`Fetched ${allTokens.length} tokens from Jupiter`);
-            
-            // Let's only check tokens added in the last scan cycle
-            // This is a heuristic, but more reliable than parsing Solana transactions directly
-            const recentTokens = allTokens.filter(token => {
+            try {
+              // Quick validation to ensure it's a real token
+              const isValid = await this.quickValidateToken(token.address);
+              
+              if (isValid) {
+                console.log(`🔔 New token detected: ${token.address} (${token.symbol || 'Unknown'} - ${token.name || 'Unknown'})`);
+                // Call the callback with the new token
+                await callback(token.address);
+              }
+            } catch (tokenError) {
+              console.warn(`Error validating token ${token.address}:`, tokenError);
+            }
+          }
+          
+          // Update last scanned block height
+          this.lastScanBlockHeight = currentBlockHeight;
+          this.saveCache();
+          lastCheckTime = Date.now();
+        } else {
+          console.log(`No new blocks since last scan (current: ${currentBlockHeight})`);
+        }
+        
+        // Schedule next scan
+        setTimeout(scanForTokens, this.scanInterval);
+      } catch (error) {
+        console.error('Error monitoring pump tokens:', error);
+        // Continue monitoring despite errors
+        setTimeout(scanForTokens, 5000);
+      }
+    };
+    
+    // Start the scanning process
+    scanForTokens();
+  }
+  
+  private async checkJupiterTokens(): Promise<Array<{address: string, symbol: string, name: string}>> {
+    try {
+      // Use Jupiter token list which is regularly updated
+      const response = await fetch('https://token.jup.ag/all');
+      const allTokens = await response.json() as Array<{address: string, symbol: string, name: string}>;
+      
+      console.log(`Fetched ${allTokens.length} tokens from Jupiter`);
+      
+      // Filter new tokens
+      const recentTokens = allTokens.filter(token => {
+        // Skip tokens we've already processed
+        if (this.knownTokensCache.has(token.address)) {
+          return false;
+        }
+        
+        // Skip tokens in our exclusion list
+        if (this.EXCLUDED_TOKENS.has(token.address)) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log(`Found ${recentTokens.length} potentially new tokens from Jupiter`);
+      return recentTokens;
+    } catch (error) {
+      console.error('Error fetching Jupiter token list:', error);
+      return [];
+    }
+  }
+  
+  private async checkPumpFunTokens(): Promise<Array<{address: string, symbol: string, name: string}>> {
+    try {
+      // Try to fetch recently created tokens from pump.fun or a related API
+      // Note: This is a placeholder - pump.fun might not have a public API
+      // You would need to replace this with the actual API endpoint or method
+      
+      // Attempt to get newest pump.fun tokens
+      try {
+        const response = await fetch('https://api.pump.fun/tokens/recent');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && Array.isArray(data.tokens)) {
+            const newTokens = data.tokens.map((token: any) => ({
+              address: token.address,
+              symbol: token.symbol || 'PUMP',
+              name: token.name || 'Pump Token'
+            })).filter((token: any) => {
               // Skip tokens we've already processed
               if (this.knownTokensCache.has(token.address)) {
                 return false;
@@ -138,49 +227,21 @@ export class PumpTokenDiscovery {
               return true;
             });
             
-            if (recentTokens.length > 0) {
-              console.log(`Found ${recentTokens.length} potentially new tokens`);
-              
-              // Process recent tokens
-              for (const token of recentTokens) {
-                // Add to known tokens cache
-                this.knownTokensCache.add(token.address);
-                
-                try {
-                  // Quick validation to ensure it's a real token
-                  const isValid = await this.quickValidateToken(token.address);
-                  
-                  if (isValid) {
-                    console.log(`🔔 New token detected: ${token.address} (${token.symbol || 'Unknown'} - ${token.name || 'Unknown'})`);
-                    // Call the callback with the new token
-                    await callback(token.address);
-                  }
-                } catch (tokenError) {
-                  console.warn(`Error validating token ${token.address}:`, tokenError);
-                }
-              }
-            } else {
-              console.log('No new tokens found in this scan');
-            }
-          } catch (fetchError) {
-            console.error('Error fetching token list:', fetchError);
+            console.log(`Found ${newTokens.length} potentially new tokens from pump.fun`);
+            return newTokens;
           }
-          
-          // Update last scanned block height
-          this.lastScanBlockHeight = currentBlockHeight;
-          this.saveCache();
-          lastCheckTime = Date.now();
-        } else {
-          console.log(`No new blocks since last scan (current: ${currentBlockHeight})`);
         }
-        
-        // Wait before next scan
-        await new Promise(resolve => setTimeout(resolve, this.scanInterval));
-      } catch (error) {
-        console.error('Error monitoring pump tokens:', error);
-        // Continue monitoring despite errors
-        await new Promise(resolve => setTimeout(resolve, 5000));
+      } catch (pumpApiError) {
+        console.log('pump.fun API not available or returned an error');
       }
+      
+      // Alternative approach: scan recent transactions for token creation
+      // This is a more complex but more reliable method
+      // For now, return empty array as this is just a placeholder
+      return [];
+    } catch (error) {
+      console.error('Error fetching pump.fun tokens:', error);
+      return [];
     }
   }
   
@@ -216,22 +277,9 @@ export class PumpTokenDiscovery {
           return false;
         }
         
-        // Look for suspicious names (often scams)
-        try {
-          const tokenInfo = await this.dexService.getTokenInfo(mintAddress);
-          if (tokenInfo) {
-            const suspiciousKeywords = ['test', 'scam', 'fake', 'rug', 'honeypot'];
-            
-            if (suspiciousKeywords.some(keyword => 
-              tokenInfo.name?.toLowerCase().includes(keyword) || 
-              tokenInfo.symbol?.toLowerCase().includes(keyword))) {
-              console.log(`${mintAddress}: Suspicious token name/symbol detected`);
-              return false;
-            }
-          }
-        } catch (error) {
-          // Ignore errors getting token info - it might be too new
-        }
+        // For pump tokens, we'll skip the suspicious name check since many pump tokens
+        // intentionally have funny/scammy-sounding names
+        return true;
       } catch (error) {
         console.log(`${mintAddress}: Error checking token account`);
         return false;
@@ -267,6 +315,22 @@ export class PumpTokenDiscovery {
       if (liquidity >= this.minLiquidityThreshold) {
         console.log(`✅ ${mintAddress}: Immediate liquidity found (${liquidity} SOL)`);
         return true;
+      }
+      
+      // For pump tokens, also try a quick quote check since some DEXes might not report liquidity correctly
+      try {
+        const quoteResult = await this.dexService.getQuote(
+          'So11111111111111111111111111111111111111112', // SOL
+          mintAddress, 
+          0.01 // Small amount for faster quote
+        );
+        
+        if (quoteResult) {
+          console.log(`✅ ${mintAddress}: Quote available, expected output: ${quoteResult.outAmount} tokens`);
+          return true;
+        }
+      } catch (quoteError) {
+        // Ignore quote errors
       }
     } catch (error) {
       console.warn(`Error during initial liquidity check for ${mintAddress}:`, error);
