@@ -41,7 +41,7 @@ HELIUS_API_KEY=your_helius_api_key
 BIRDEYE_API_KEY=your_birdeye_api_key
 
 # Trade parameters
-PUMP_SNIPE_AMOUNT=0.1        # SOL amount per trade
+PUMP_SNIPE_AMOUNT=0.02        # SOL amount per trade
 STOP_LOSS_PERCENTAGE=50      # 50% stop loss
 TAKE_PROFIT_PERCENTAGE=200   # 200% take profit
 SLIPPAGE_BPS=1000            # 10% slippage
