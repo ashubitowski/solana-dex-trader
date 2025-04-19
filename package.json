@@ -5,7 +5,11 @@
   "main": "dist/pump-sniper.js",
   "scripts": {
     "build": "tsc",
-    "pump-sniper": "tsx src/pump-sniper.ts"
+    "pump-sniper": "tsx src/pump-sniper.ts",
+    "dev": "nodemon --exec tsx src/pump-sniper.ts",
+    "setup-key": "node scripts/extract-key.js",
+    "clean": "rm -rf .cache logs && mkdir -p .cache logs",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "keywords": [
     "solana",

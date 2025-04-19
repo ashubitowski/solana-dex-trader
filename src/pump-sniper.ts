@@ -1,31 +1,24 @@
 // Immediately silence WebSocket errors before anything else loads
-// Intercept all console.error calls
-const originalConsoleError = console.error;
-// @ts-ignore - We know what we're doing with this override
-console.error = function() {
-  const args = Array.from(arguments);
-  const message = args.join(' ').toLowerCase();
-  // Skip any WebSocket related errors
-  if (message.includes('ws error') || 
-      message.includes('websocket') || 
-      message.includes('unexpected server') ||
-      message.includes('404')) {
-    return; // Completely silence
-  }
-  originalConsoleError.apply(console, args);
-};
+// Create a single suppression function to handle all console methods
+function suppressWebSocketErrors(originalFn: typeof console.log) {
+  // @ts-ignore - We know what we're doing with this override
+  return function() {
+    const args = Array.from(arguments);
+    const message = args.join(' ').toLowerCase();
+    // Skip any WebSocket related errors
+    if (message.includes('ws error') || 
+        message.includes('websocket') || 
+        message.includes('unexpected server') ||
+        message.includes('404')) {
+      return; // Completely silence
+    }
+    originalFn.apply(console, args);
+  };
+}
 
-// Also intercept console.log for ws errors that might come through there
-const originalConsoleLog = console.log;
-// @ts-ignore - We know what we're doing with this override
-console.log = function() {
-  const args = Array.from(arguments);
-  const message = args.join(' ').toLowerCase();
-  if (message.includes('ws error')) {
-    return; // Completely silence
-  }
-  originalConsoleLog.apply(console, args);
-};
+// Apply the suppression to both console.error and console.log
+console.error = suppressWebSocketErrors(console.error);
+console.log = suppressWebSocketErrors(console.log);
 
 import { Connection } from '@solana/web3.js';
 import { DexService } from './services/dex';

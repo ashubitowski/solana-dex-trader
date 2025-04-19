@@ -54,10 +54,9 @@ export class PumpTokenDiscovery {
   private readonly MIN_TOKEN_AGE_HOURS = Number(process.env.MIN_TOKEN_AGE_HOURS || '24'); // Minimum age in hours (default 24h)
   private readonly MAX_TOKEN_AGE_HOURS = Number(process.env.MAX_TOKEN_AGE_HOURS || '72'); // Maximum age in hours (default 72h)
   
-  constructor() {
-    this.connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
-    const walletService = new WalletService();
-    this.dexService = new DexService(this.connection, walletService);
+  constructor(connection: Connection, dexService: DexService) {
+    this.connection = connection;
+    this.dexService = dexService;
     this.minLiquidityThreshold = parseFloat(process.env.MIN_LIQUIDITY_THRESHOLD || '5');
     this.EXCLUDED_TOKENS = new Set([
       'So11111111111111111111111111111111111111112', // SOL
