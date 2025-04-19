@@ -283,33 +283,66 @@ export class DexService {
                 // 3. Execute the transaction
                 console.log(`Signing and sending transaction...`);
                 const transactionBuffer = Buffer.from(swapResult.swapTransaction, 'base64');
-                const transaction = Transaction.from(transactionBuffer);
                 
-                // Get a fresh blockhash
-                const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = this.walletService.getKeypair().publicKey;
-                
-                // Sign the transaction
-                transaction.sign(this.walletService.getKeypair());
-                
-                // Send and confirm the transaction
-                const signature = await this.connection.sendRawTransaction(transaction.serialize());
-                console.log(`Transaction sent with signature: ${signature}`);
-                
-                // Wait for confirmation with timeout
-                const confirmation = await this.connection.confirmTransaction({
-                    signature,
-                    blockhash,
-                    lastValidBlockHeight
-                }, 'confirmed');
-                
-                if (confirmation.value.err) {
-                    throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                // Handle both versioned and legacy transactions
+                let transaction;
+                try {
+                    // First try to deserialize as a versioned transaction
+                    transaction = VersionedTransaction.deserialize(transactionBuffer);
+                    console.log('Detected versioned transaction');
+                    
+                    // Add the signer
+                    transaction.sign([this.walletService.getKeypair()]);
+                    
+                    // Send and confirm the transaction
+                    const signature = await this.connection.sendTransaction(transaction);
+                    console.log(`Transaction sent with signature: ${signature}`);
+                    
+                    // Wait for confirmation with timeout
+                    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
+                    const confirmation = await this.connection.confirmTransaction({
+                        signature,
+                        blockhash,
+                        lastValidBlockHeight
+                    }, 'confirmed');
+                    
+                    if (confirmation.value.err) {
+                        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                    }
+                    
+                    console.log(`Trade executed successfully! Signature: ${signature}`);
+                    return signature;
+                } catch (error) {
+                    // If it fails, try as a legacy transaction
+                    console.log('Failed to process as versioned transaction, trying legacy format:', error);
+                    transaction = Transaction.from(transactionBuffer);
+                    
+                    // Get a fresh blockhash
+                    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
+                    transaction.recentBlockhash = blockhash;
+                    transaction.feePayer = this.walletService.getKeypair().publicKey;
+                    
+                    // Sign the transaction
+                    transaction.sign(this.walletService.getKeypair());
+                    
+                    // Send and confirm the transaction
+                    const signature = await this.connection.sendRawTransaction(transaction.serialize());
+                    console.log(`Transaction sent with signature: ${signature}`);
+                    
+                    // Wait for confirmation with timeout
+                    const confirmation = await this.connection.confirmTransaction({
+                        signature,
+                        blockhash,
+                        lastValidBlockHeight
+                    }, 'confirmed');
+                    
+                    if (confirmation.value.err) {
+                        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                    }
+                    
+                    console.log(`Trade executed successfully! Signature: ${signature}`);
+                    return signature;
                 }
-                
-                console.log(`Trade executed successfully! Signature: ${signature}`);
-                return signature;
             } catch (error) {
                 console.error(`Error in executeTrade:`, error);
                 throw error;
