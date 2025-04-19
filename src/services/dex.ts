@@ -432,15 +432,91 @@ export class DexService {
     }
 
     private async getJupiterPrice(tokenMint: string): Promise<number | null> {
+        const jupiterEndpoints = [
+            'https://api.jup.ag/v4',
+            'https://price.jup.ag/v4',
+            'https://quote-api.jup.ag/v6',
+            'https://jupiter.rpcpool.com/price/v4',
+            'https://jupiter-api.rpcpool.com/v4'
+        ];
+
         try {
-            const response = await fetch(`https://price.jup.ag/v4/price?ids=${tokenMint}&vsToken=So11111111111111111111111111111111111111112`);
-            if (!response.ok) {
-                throw new Error(`Jupiter API returned ${response.status}: ${response.statusText}`);
+            // Try each endpoint in sequence
+            for (const baseEndpoint of jupiterEndpoints) {
+                try {
+                    console.log(`Trying Jupiter endpoint: ${baseEndpoint}`);
+                    
+                    if (baseEndpoint.includes('quote-api')) {
+                        // Use quote endpoint format
+                        const response = await fetch(`${baseEndpoint}/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${tokenMint}&amount=1000000000&slippageBps=50`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            return data.outAmount / 1000000000; // Convert to SOL price
+                        }
+                    } else {
+                        // Use price endpoint format
+                        const response = await fetch(`${baseEndpoint}/price?ids=${tokenMint}&vsToken=So11111111111111111111111111111111111111112`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            const price = data.data?.[tokenMint]?.price;
+                            if (price) return price;
+                        }
+                    }
+                } catch (endpointError) {
+                    console.warn(`Failed to fetch from ${baseEndpoint}:`, endpointError);
+                    continue; // Try next endpoint
+                }
             }
-            const data = await response.json();
-            return data.data[tokenMint]?.price || null;
+
+            console.log('All Jupiter endpoints failed, trying Raydium pools...');
+
+            // If all Jupiter endpoints fail, try Raydium pools
+            const pools = await this.getRaydiumPools();
+            const tokenPools = pools.filter(pool => 
+                pool.baseMint === tokenMint || pool.quoteMint === tokenMint
+            );
+
+            if (tokenPools.length > 0) {
+                let totalLiquidity = 0;
+                let totalValue = 0;
+                
+                for (const pool of tokenPools) {
+                    const poolLiquidity = parseFloat(pool.liquidity || '0');
+                    if (poolLiquidity > 0) {
+                        totalLiquidity += poolLiquidity;
+                        const poolPrice = parseFloat(pool.price || '0');
+                        if (poolPrice > 0) {
+                            totalValue += poolLiquidity * (pool.baseMint === tokenMint ? poolPrice : 1/poolPrice);
+                        }
+                    }
+                }
+
+                if (totalLiquidity > 0 && totalValue > 0) {
+                    return totalValue / totalLiquidity;
+                }
+            }
+
+            // If all methods fail, try one last time with Birdeye if available
+            if (process.env.BIRDEYE_API_KEY) {
+                try {
+                    const response = await fetch(
+                        `https://public-api.birdeye.so/public/price?address=${tokenMint}`,
+                        { headers: { 'X-API-KEY': process.env.BIRDEYE_API_KEY } }
+                    );
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.data?.value > 0) {
+                            return data.data.value;
+                        }
+                    }
+                } catch (error) {
+                    // Ignore Birdeye errors
+                }
+            }
+            
+            return null;
         } catch (error) {
-            console.error('Error fetching Jupiter price:', error);
+            console.warn(`Error fetching price for ${tokenMint}:`, error);
             return null;
         }
     }
@@ -1001,16 +1077,28 @@ export class DexService {
     }
 
     public async getQuote(inputMint: string, outputMint: string, amount: number): Promise<QuoteResponse | null> {
+        const quoteEndpoints = [
+            'https://quote-api.jup.ag/v6',
+            'https://jupiter.rpcpool.com/quote/v6',
+            'https://quote.jup.ag/v6'
+        ];
+
         return this.retryWithBackoff(async () => {
             await this.waitForRateLimit();
-            const response = await fetch(`https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50`);
-            if (!response.ok) {
-                if (response.status === 404 || response.status === 400) {
-                    return null; // No quote available
+
+            // Try each endpoint in sequence
+            for (const endpoint of quoteEndpoints) {
+                try {
+                    const response = await fetch(`${endpoint}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50`);
+                    if (response.ok) {
+                        return await response.json() as QuoteResponse;
+                    }
+                } catch (endpointError) {
+                    continue; // Try next endpoint
                 }
-                throw new Error(`Failed to get quote: ${response.statusText}`);
             }
-            return await response.json() as QuoteResponse;
+
+            return null; // No quote available from any endpoint
         });
     }
 

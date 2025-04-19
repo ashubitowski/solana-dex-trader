@@ -12,6 +12,7 @@ export class WalletService {
     private webSocketWrapper: WebSocketWrapper | null = null;
     private reconnectAttempts: number = 0;
     private readonly maxReconnectAttempts: number = 5;
+    private logsSubscriptionId: number | null = null;
 
     constructor() {
         this.initializeConnection();
@@ -21,33 +22,125 @@ export class WalletService {
         try {
             const rpcUrl = process.env.SOLANA_RPC_URL;
             if (!rpcUrl) {
-                throw new Error('SOLANA_RPC_URL is not set in environment variables');
+                throw new Error('SOLANA_RPC_URL not found in environment variables');
             }
 
-            // Initialize keypair first
-            const privateKeyString = process.env.SOLANA_PRIVATE_KEY;
-            if (!privateKeyString) {
-                throw new Error('SOLANA_PRIVATE_KEY is not set in environment variables');
-            }
-            const privateKey = bs58.decode(privateKeyString);
-            this.keypair = Keypair.fromSecretKey(privateKey);
-
-            // Create connection with websocket configuration
             const wsEndpoint = rpcUrl.replace('https://', 'wss://');
-            console.log('Connecting to WebSocket endpoint:', wsEndpoint);
+            console.log(`Connecting to Solana RPC: ${rpcUrl}`);
 
+            // Configure connection with better rate limit handling
             this.connection = new Connection(rpcUrl, {
                 commitment: 'confirmed',
-                wsEndpoint: wsEndpoint,
                 confirmTransactionInitialTimeout: 60000,
-                disableRetryOnRateLimit: false
+                wsEndpoint,
+                disableRetryOnRateLimit: false,
+                httpHeaders: {
+                    'Content-Type': 'application/json',
+                },
             });
 
-            // Initialize WebSocket wrapper
-            this.webSocketWrapper = new WebSocketWrapper(this.connection);
+            // Initialize keypair first
+            const privateKeyStr = process.env.SOLANA_PRIVATE_KEY;
+            if (!privateKeyStr) {
+                throw new Error('SOLANA_PRIVATE_KEY not found in environment variables');
+            }
 
-            // Set up logs subscription
-            await this.setupLogsSubscription();
+            try {
+                // Try parsing as base58 first
+                const privateKey = bs58.decode(privateKeyStr);
+                this.keypair = Keypair.fromSecretKey(privateKey);
+            } catch (error) {
+                // If base58 fails, try parsing as JSON array
+                try {
+                    const privateKey = new Uint8Array(JSON.parse(privateKeyStr));
+                    this.keypair = Keypair.fromSecretKey(privateKey);
+                } catch (jsonError) {
+                    throw new Error('Invalid private key format. Must be base58 encoded or JSON array');
+                }
+            }
+
+            console.log(`Using wallet: ${this.keypair.publicKey.toString()}`);
+
+            // Set up logs subscription with improved error handling
+            let retries = 0;
+            const maxRetries = 5;
+            let lastErrorTime = 0;
+            const errorCooldown = 5000; // 5 seconds between error logs
+
+            // Create a wrapper for the logs callback that filters out 404 errors
+            const handleLogsCallback: LogsCallback = (logs, context) => {
+                if (!logs.err) {
+                    // Only log non-error messages if they're significant
+                    if (logs.signature) {
+                        console.log('Received transaction logs:', logs);
+                    }
+                } else {
+                    const errorMessage = logs.err.toString().toLowerCase();
+                    // Skip logging for common WebSocket errors
+                    const isCommonError = 
+                        errorMessage.includes('404') ||
+                        errorMessage.includes('unexpected server response') ||
+                        errorMessage.includes('getaddrinfo enotfound') ||
+                        errorMessage.includes('websocket') ||
+                        errorMessage.includes('connection closed');
+
+                    if (!isCommonError) {
+                        const now = Date.now();
+                        if (now - lastErrorTime > errorCooldown) {
+                            console.warn('Non-WebSocket error occurred:', logs.err);
+                            lastErrorTime = now;
+                        }
+                    }
+                }
+            };
+
+            const subscribeToLogs = async () => {
+                try {
+                    if (this.logsSubscriptionId !== null) {
+                        try {
+                            await this.connection.removeOnLogsListener(this.logsSubscriptionId);
+                        } catch (error) {
+                            // Ignore removal errors
+                        }
+                    }
+
+                    this.logsSubscriptionId = this.connection.onLogs(
+                        this.keypair.publicKey,
+                        handleLogsCallback,
+                        'confirmed'
+                    );
+                    console.log('WebSocket subscription established');
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+                    // Only log non-404 errors
+                    if (!errorMessage.includes('404') && 
+                        !errorMessage.includes('unexpected server response')) {
+                        const now = Date.now();
+                        if (now - lastErrorTime > errorCooldown) {
+                            console.warn('Error in logs subscription. Will retry...');
+                            lastErrorTime = now;
+                        }
+                    }
+                    
+                    if (retries < maxRetries) {
+                        retries++;
+                        const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        await subscribeToLogs();
+                    }
+                }
+            };
+
+            await subscribeToLogs();
+            
+            // Set up periodic subscription check
+            setInterval(async () => {
+                if (this.logsSubscriptionId === null) {
+                    console.log('Reestablishing logs subscription...');
+                    await subscribeToLogs();
+                }
+            }, 30000); // Check every 30 seconds
+            
         } catch (error) {
             console.error('Error initializing connection:', error);
             throw error;
