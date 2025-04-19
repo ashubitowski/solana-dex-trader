@@ -27,8 +27,10 @@
     "@solana/wallet-adapter-phantom": "^0.9.24",
     "@solana/web3.js": "^1.87.6",
     "@types/bs58": "^5.0.0",
+    "@types/ws": "^8.18.1",
     "bs58": "^5.0.0",
     "dotenv": "^16.3.1",
+    "isomorphic-ws": "^5.0.0",
     "tsx": "^4.7.1"
   },
   "devDependencies": {
