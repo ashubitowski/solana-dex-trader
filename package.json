@@ -1,0 +1,41 @@
+{
+  "name": "solana-dex-trader",
+  "version": "1.0.0",
+  "description": "Solana DEX trading bot for pump token sniping",
+  "main": "dist/pump-sniper.js",
+  "scripts": {
+    "build": "tsc",
+    "pump-sniper": "tsx src/pump-sniper.ts"
+  },
+  "keywords": [
+    "solana",
+    "dex",
+    "trading",
+    "pump",
+    "snipe",
+    "cryptocurrency"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@jup-ag/api": "^6.0.12",
+    "@openbook-dex/openbook": "^0.0.9",
+    "@project-serum/serum": "^0.13.65",
+    "@solana/spl-token": "^0.3.11",
+    "@solana/spl-token-registry": "^0.2.4574",
+    "@solana/wallet-adapter-base": "^0.9.23",
+    "@solana/wallet-adapter-phantom": "^0.9.24",
+    "@solana/web3.js": "^1.87.6",
+    "@types/bs58": "^5.0.0",
+    "bs58": "^5.0.0",
+    "dotenv": "^16.3.1",
+    "tsx": "^4.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.3.3"
+  }
+}
