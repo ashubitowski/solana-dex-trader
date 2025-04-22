@@ -1,0 +1,462 @@
+{
+  "version": "41.0.0",
+  "artifacts": {
+    "InfrastructureStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "InfrastructureStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "InfrastructureStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://323399919537/us-east-2",
+      "properties": {
+        "templateFile": "InfrastructureStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::323399919537:role/cdk-hnb659fds-deploy-role-323399919537-us-east-2",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::323399919537:role/cdk-hnb659fds-cfn-exec-role-323399919537-us-east-2",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-323399919537-us-east-2/f97b59dc64b43051d4b0669e2d3a1694e36b9d6ae53ffe576472b6d38307cd9d.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "InfrastructureStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::323399919537:role/cdk-hnb659fds-lookup-role-323399919537-us-east-2",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "InfrastructureStack.assets"
+      ],
+      "metadata": {
+        "/InfrastructureStack/WebsiteBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WebsiteBucket75C24D94"
+          }
+        ],
+        "/InfrastructureStack/WebsiteBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WebsiteBucketPolicyE10E3262"
+          }
+        ],
+        "/InfrastructureStack/WebsiteBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WebsiteBucketAutoDeleteObjectsCustomResource8750E461"
+          }
+        ],
+        "/InfrastructureStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/InfrastructureStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/InfrastructureStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/InfrastructureStack/OAI/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "OAIE1EFC67F"
+          }
+        ],
+        "/InfrastructureStack/Distribution/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Distribution830FAC52"
+          }
+        ],
+        "/InfrastructureStack/UserPool/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPool6BA7E5F2"
+          }
+        ],
+        "/InfrastructureStack/UserPoolClient/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClient2F5918F7"
+          }
+        ],
+        "/InfrastructureStack/UsersTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UsersTable9725E9C8"
+          }
+        ],
+        "/InfrastructureStack/RateLimitTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RateLimitTableFAD921A1"
+          }
+        ],
+        "/InfrastructureStack/TokensTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TokensTable6C9B5BC6"
+          }
+        ],
+        "/InfrastructureStack/PositionsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PositionsTable41EA5B9F"
+          }
+        ],
+        "/InfrastructureStack/ApiLambdaHandler/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiLambdaHandlerServiceRoleE309A3A0"
+          }
+        ],
+        "/InfrastructureStack/ApiLambdaHandler/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiLambdaHandlerServiceRoleDefaultPolicy534EEB6C"
+          }
+        ],
+        "/InfrastructureStack/ApiLambdaHandler/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiLambdaHandlerCE925BB7"
+          }
+        ],
+        "/InfrastructureStack/ApiLambdaHandler/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiLambdaHandlerLogRetention49B0CE2B"
+          }
+        ],
+        "/InfrastructureStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+          }
+        ],
+        "/InfrastructureStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB"
+          }
+        ],
+        "/InfrastructureStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A"
+          }
+        ],
+        "/InfrastructureStack/Api/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiF70053CD"
+          }
+        ],
+        "/InfrastructureStack/Api/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiDeploymentB17BE62De1ef80607a6a7fc552833753cf0092d6"
+          }
+        ],
+        "/InfrastructureStack/Api/DeploymentStage.prod/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiDeploymentStageprod3EB9684E"
+          }
+        ],
+        "/InfrastructureStack/Api/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiEndpoint4F160690"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiOPTIONS5886EA5D"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/tokens/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apitokens58868B7F"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/tokens/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitokensOPTIONS395A0C77"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/tokens/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..tokens": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitokensGETApiPermissionInfrastructureStackApiD473DFBAGETtokens242D82DF"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/tokens/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..tokens": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitokensGETApiPermissionTestInfrastructureStackApiD473DFBAGETtokensB00F521E"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/tokens/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitokensGETDEC36D6B"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/positions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apipositions9F406D13"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/positions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipositionsOPTIONS3BBC1E5D"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/positions/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..positions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipositionsGETApiPermissionInfrastructureStackApiD473DFBAGETpositions769E2C39"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/positions/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..positions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipositionsGETApiPermissionTestInfrastructureStackApiD473DFBAGETpositionsC811B945"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/positions/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipositionsGETA1BF6530"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/auth/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiauth161C653C"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/auth/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiauthOPTIONSC18B26B2"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/auth/POST/ApiPermission.InfrastructureStackApiD473DFBA.POST..auth": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiauthPOSTApiPermissionInfrastructureStackApiD473DFBAPOSTauth94BC026F"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/auth/POST/ApiPermission.Test.InfrastructureStackApiD473DFBA.POST..auth": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiauthPOSTApiPermissionTestInfrastructureStackApiD473DFBAPOSTauth76A56F16"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/auth/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiauthPOST8DF5B0DC"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/stats/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apistats98F7617F"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/stats/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApistatsOPTIONS281F61C8"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/stats/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..stats": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApistatsGETApiPermissionInfrastructureStackApiD473DFBAGETstats8A3A3801"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/stats/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..stats": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApistatsGETApiPermissionTestInfrastructureStackApiD473DFBAGETstats043902E3"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/stats/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApistatsGET7896017D"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/logs/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apilogs3592D9D4"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/logs/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApilogsOPTIONSF44380FC"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/logs/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..logs": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApilogsGETApiPermissionInfrastructureStackApiD473DFBAGETlogs6C721593"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/logs/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..logs": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApilogsGETApiPermissionTestInfrastructureStackApiD473DFBAGETlogs8AE73C3D"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/logs/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApilogsGET0440CA2D"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/wallet/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiwalletAE954E48"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/wallet/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiwalletOPTIONSCC434475"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/wallet/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..wallet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiwalletGETApiPermissionInfrastructureStackApiD473DFBAGETwalletC2CF69E9"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/wallet/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..wallet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiwalletGETApiPermissionTestInfrastructureStackApiD473DFBAGETwallet4F6B0325"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/wallet/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiwalletGETBAC96AF6"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/dashboard/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidashboardA917D38E"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/dashboard/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidashboardOPTIONS9B1178C9"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/dashboard/GET/ApiPermission.InfrastructureStackApiD473DFBA.GET..dashboard": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidashboardGETApiPermissionInfrastructureStackApiD473DFBAGETdashboard3F1448DD"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/dashboard/GET/ApiPermission.Test.InfrastructureStackApiD473DFBA.GET..dashboard": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidashboardGETApiPermissionTestInfrastructureStackApiD473DFBAGETdashboard009348F0"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/dashboard/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidashboardGETEA284596"
+          }
+        ],
+        "/InfrastructureStack/ApiAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiAuthorizer68095F41"
+          }
+        ],
+        "/InfrastructureStack/CloudFrontDomain": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CloudFrontDomain"
+          }
+        ],
+        "/InfrastructureStack/UserPoolId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolId"
+          }
+        ],
+        "/InfrastructureStack/UserPoolClientId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClientId"
+          }
+        ],
+        "/InfrastructureStack/ApiEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiEndpoint"
+          }
+        ],
+        "/InfrastructureStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/InfrastructureStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/InfrastructureStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "InfrastructureStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  },
+  "minimumCliVersion": "2.1005.0"
+}
