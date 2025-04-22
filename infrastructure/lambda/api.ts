@@ -3,9 +3,17 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { handler as authHandler } from './auth'; // Import the handler from auth.ts
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'; // Added Solana imports
+import { 
+    SecretsManagerClient, 
+    GetSecretValueCommand, 
+    PutSecretValueCommand, 
+    ResourceNotFoundException // To handle secret not found
+} from "@aws-sdk/client-secrets-manager"; // Added Secrets Manager imports
+import * as bs58 from 'bs58'; // Import bs58 using namespace import
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const ddbClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(ddbClient);
+const smClient = new SecretsManagerClient({}); // Secrets Manager client
 
 // Define CORS headers - ensure this is added to ALL responses
 const corsHeaders = {
@@ -20,10 +28,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Incoming Event:', JSON.stringify(event, null, 2)); // Log the incoming event
 
     let response: APIGatewayProxyResult;
+    const method = event.httpMethod;
+    const path = event.path;
+    const secretPrefix = process.env.SECRET_NAME_PREFIX || 'solana-dex-trader/wallet'; // Get prefix from env
 
     try {
-        const method = event.httpMethod;
-        const path = event.path;
+        // Get userId for protected routes (place here for DRY)
+        const userId = event.requestContext.authorizer?.claims?.sub;
+        let secretName: string | undefined;
+        if (userId) {
+            secretName = `${secretPrefix}/${userId}`;
+        }
 
         // Simple router based on path
         if (path.startsWith('/auth') && method === 'POST') {
@@ -48,10 +63,136 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
                 headers: finalHeaders,
                 body: authResponse.body,
             };
+        } else if (path.startsWith('/config/wallet') && method === 'POST') {
+            console.log('Routing to /config/wallet POST handler (Base58)');
+            if (!userId || !secretName) {
+                console.error('Unauthorized access attempt to /config/wallet');
+                return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ message: 'Unauthorized' }) };
+            }
+            if (!event.body) {
+                 return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Missing request body' }) };
+            }
+            
+            try {
+                const body = JSON.parse(event.body);
+                const secretKeyBase58 = body.secretKeyBase58; // Expecting Base58 string
+                
+                if (!secretKeyBase58 || typeof secretKeyBase58 !== 'string') {
+                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Missing or invalid secretKeyBase58 in body' }) };
+                }
+                
+                // Basic Base58 validation (can add more robust checks if needed)
+                try {
+                    const decoded = bs58.decode(secretKeyBase58);
+                    if (decoded.length !== 64) { // Standard Solana secret keys are 64 bytes
+                         throw new Error('Decoded key is not 64 bytes long.');
+                    }
+                } catch (e: any) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'Invalid Base58 secret key format.', error: e.message }) };
+                }
+                
+                console.log(`Storing Base58 secret for user ${userId} in secret ${secretName}`);
+                
+                const command = new PutSecretValueCommand({
+                    SecretId: secretName,
+                    SecretString: secretKeyBase58, // Store the Base58 string
+                });
+                await smClient.send(command);
+                
+                response = {
+                    statusCode: 200,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Wallet configuration saved successfully.' })
+                };
+                
+            } catch (configError: any) {
+                 console.error(`Error saving Base58 config for user ${userId}:`, configError);
+                  response = {
+                    statusCode: 500,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Failed to save wallet configuration', error: configError.message })
+                 };
+            }
+        } else if (path.startsWith('/wallet') && method === 'GET') {
+            console.log('Routing to /wallet GET handler (Base58)');
+            if (!userId || !secretName) {
+                console.error('User ID not found in authorizer claims for /wallet');
+                return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ message: 'Unauthorized' }) };
+            }
+            
+            try {
+                console.log(`Fetching wallet info for user: ${userId} from secret ${secretName}`);
+                let secretKeyBase58: string | undefined;
+                
+                // 1. Fetch Base58 secret string from Secrets Manager
+                try {
+                    const command = new GetSecretValueCommand({ SecretId: secretName });
+                    const secretResponse = await smClient.send(command);
+                    secretKeyBase58 = secretResponse.SecretString;
+                } catch (error: any) {
+                    if (error instanceof ResourceNotFoundException) {
+                        console.log(`Secret ${secretName} not found for user ${userId}. Wallet not configured.`);
+                        // Return specific status indicating not configured
+                        return {
+                            statusCode: 200, // Or maybe 404? Let's use 200 with status for now
+                            headers: corsHeaders,
+                            body: JSON.stringify({ address: null, balance: 0, status: { message: 'Wallet not configured', type: 'warning'} })
+                        };
+                    } else {
+                        throw error; // Re-throw other errors
+                    }
+                }
+
+                if (!secretKeyBase58) {
+                     throw new Error('Fetched secret string is empty.');
+                }
+                
+                // 2. Decode Base58 string into Uint8Array
+                let secretKeyBytes: Uint8Array;
+                 try {
+                    secretKeyBytes = bs58.decode(secretKeyBase58);
+                     if (secretKeyBytes.length !== 64) { 
+                         throw new Error('Decoded key is not 64 bytes long.');
+                    }
+                 } catch (e: any) {
+                     throw new Error(`Invalid Base58 secret key format stored in Secrets Manager: ${e.message}`);
+                 }
+                
+                // 3. Use the bytes to get address and balance
+                const rpcEndpoint = process.env.SOLANA_RPC_ENDPOINT;
+                if (!rpcEndpoint) {
+                    throw new Error('SOLANA_RPC_ENDPOINT environment variable not set.');
+                }
+                const connection = new Connection(rpcEndpoint, 'confirmed');
+                const keypair = Keypair.fromSecretKey(secretKeyBytes); // Use decoded bytes
+                const publicKey = keypair.publicKey;
+
+                const balanceLamports = await connection.getBalance(publicKey);
+                const balanceSol = balanceLamports / LAMPORTS_PER_SOL;
+
+                console.log(`Wallet Address: ${publicKey.toBase58()}, Balance: ${balanceSol} SOL`);
+
+                response = {
+                    statusCode: 200,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ 
+                        address: publicKey.toBase58(), 
+                        balance: balanceSol,
+                        status: { message: 'Connected', type: 'success'} 
+                    })
+                };
+
+            } catch (walletError: any) {
+                console.error('Error fetching wallet data (Base58):', walletError);
+                response = {
+                    statusCode: 500,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Failed to fetch wallet data', error: walletError.message })
+                };
+            }
         } else if (path.startsWith('/stats') && method === 'GET') {
             console.log('Routing to /stats GET handler');
             // TODO: Implement stats logic - requires authenticated user ID from authorizer context
-            const userId = event.requestContext.authorizer?.claims?.sub; // Example: Get user ID from Cognito claims
             if (!userId) {
                 console.error('User ID not found in authorizer claims for /stats');
                 response = {
@@ -72,46 +213,43 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         } else if (path.startsWith('/tokens') && method === 'GET') {
             console.log('Routing to /tokens GET handler');
             // Example: Fetch token data (requires auth)
-            const userId = event.requestContext.authorizer?.claims?.sub;
-             if (!userId) {
-                 console.error('User ID not found in authorizer claims for /tokens');
-                 response = {
-                     statusCode: 401,
-                     headers: corsHeaders, 
-                     body: JSON.stringify({ message: 'Unauthorized' })
-                 };
-             } else {
-                 console.log(`Fetching tokens for user: ${userId}`);
-                 // Replace with actual logic
-                 response = {
-                     statusCode: 200,
-                     headers: corsHeaders,
-                     body: JSON.stringify([{ token: 'TOKEN1' }, { token: 'TOKEN2' }])
-                 };
-             }
+            if (!userId) {
+                console.error('User ID not found in authorizer claims for /tokens');
+                response = {
+                    statusCode: 401,
+                    headers: corsHeaders, 
+                    body: JSON.stringify({ message: 'Unauthorized' })
+                };
+            } else {
+                console.log(`Fetching tokens for user: ${userId}`);
+                // Replace with actual logic
+                response = {
+                    statusCode: 200,
+                    headers: corsHeaders,
+                    body: JSON.stringify([{ token: 'TOKEN1' }, { token: 'TOKEN2' }])
+                };
+            }
         } else if (path.startsWith('/positions') && method === 'GET') {
             console.log('Routing to /positions GET handler');
             // Example: Fetch positions data (requires auth)
-            const userId = event.requestContext.authorizer?.claims?.sub;
-             if (!userId) {
-                 console.error('User ID not found in authorizer claims for /positions');
-                 response = {
-                     statusCode: 401,
-                     headers: corsHeaders, 
-                     body: JSON.stringify({ message: 'Unauthorized' })
-                 };
-             } else {
-                 console.log(`Fetching positions for user: ${userId}`);
-                 // Replace with actual logic
-                 response = {
-                     statusCode: 200,
-                     headers: corsHeaders,
-                     body: JSON.stringify([{ position: 'POS1' }, { position: 'POS2' }])
-                 };
-             }
+            if (!userId) {
+                console.error('User ID not found in authorizer claims for /positions');
+                response = {
+                    statusCode: 401,
+                    headers: corsHeaders, 
+                    body: JSON.stringify({ message: 'Unauthorized' })
+                };
+            } else {
+                console.log(`Fetching positions for user: ${userId}`);
+                // Replace with actual logic
+                response = {
+                    statusCode: 200,
+                    headers: corsHeaders,
+                    body: JSON.stringify([{ position: 'POS1' }, { position: 'POS2' }])
+                };
+            }
         } else if (path.startsWith('/logs') && method === 'GET') {
             console.log('Routing to /logs GET handler');
-            const userId = event.requestContext.authorizer?.claims?.sub;
             if (!userId) {
                 console.error('User ID not found in authorizer claims for /logs');
                 response = {
@@ -128,68 +266,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
                     body: JSON.stringify([{ level: 'info', message: 'Log entry 1' }, { level: 'error', message: 'Log entry 2' }])
                 };
             }
-        } else if (path.startsWith('/wallet') && method === 'GET') {
-            console.log('Routing to /wallet GET handler');
-            const userId = event.requestContext.authorizer?.claims?.sub;
-            if (!userId) {
-                console.error('User ID not found in authorizer claims for /wallet');
-                response = {
-                    statusCode: 401,
-                    headers: corsHeaders, 
-                    body: JSON.stringify({ message: 'Unauthorized' })
-                };
-            } else {
-                console.log(`Fetching wallet info for user: ${userId}`);
-                try {
-                    // --- Replace Placeholder Logic with Real Logic --- 
-                    const rpcEndpoint = process.env.SOLANA_RPC_ENDPOINT;
-                    if (!rpcEndpoint) {
-                        throw new Error('SOLANA_RPC_ENDPOINT environment variable not set.');
-                    }
-                    const connection = new Connection(rpcEndpoint, 'confirmed');
-
-                    // TODO: Replace this hardcoded key with retrieval from DB later
-                    // IMPORTANT: This is a placeholder key. Generate a new burner keypair for testing.
-                    // Never commit real secret keys.
-                    const tempSecretKey = new Uint8Array([
-                        // Replace with a generated test key (e.g., from Phantom export or `solana-keygen new`)
-                        // Example only - DO NOT USE THIS KEY
-                        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
-                        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-                        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 
-                        49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64 
-                    ]); 
-                    const keypair = Keypair.fromSecretKey(tempSecretKey);
-                    const publicKey = keypair.publicKey;
-
-                    const balanceLamports = await connection.getBalance(publicKey);
-                    const balanceSol = balanceLamports / LAMPORTS_PER_SOL;
-
-                    console.log(`Wallet Address: ${publicKey.toBase58()}, Balance: ${balanceSol} SOL`);
-
-                    response = {
-                        statusCode: 200,
-                        headers: corsHeaders,
-                        // Return real address and balance
-                        body: JSON.stringify({ 
-                            address: publicKey.toBase58(), 
-                            balance: balanceSol,
-                            // Keep status for potential UI updates (e.g., connected/disconnected from RPC)
-                            status: { message: 'Connected', type: 'success'} 
-                        })
-                    };
-                } catch (walletError: any) {
-                    console.error('Error fetching wallet data:', walletError);
-                    response = {
-                        statusCode: 500,
-                        headers: corsHeaders,
-                        body: JSON.stringify({ message: 'Failed to fetch wallet data', error: walletError.message })
-                    };
-                }
-            }
         } else if (path.startsWith('/dashboard') && method === 'GET') {
             console.log('Routing to /dashboard GET handler');
-            const userId = event.requestContext.authorizer?.claims?.sub;
             if (!userId) {
                 console.error('User ID not found in authorizer claims for /dashboard');
                 response = {

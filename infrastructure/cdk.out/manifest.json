@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::323399919537:role/cdk-hnb659fds-deploy-role-323399919537-us-east-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::323399919537:role/cdk-hnb659fds-cfn-exec-role-323399919537-us-east-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-323399919537-us-east-2/f97b59dc64b43051d4b0669e2d3a1694e36b9d6ae53ffe576472b6d38307cd9d.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-323399919537-us-east-2/957adf259567b05d013ddcf49bd5e7b518d50772b4f491849579a0e346cca6e2.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -169,7 +169,7 @@
         "/InfrastructureStack/Api/Deployment/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "ApiDeploymentB17BE62De1ef80607a6a7fc552833753cf0092d6"
+            "data": "ApiDeploymentB17BE62Dbfbd581916aa26ba55cb72be102f9ad0"
           }
         ],
         "/InfrastructureStack/Api/DeploymentStage.prod/Resource": [
@@ -398,6 +398,48 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "ApidashboardGETEA284596"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiconfig62453FB1"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiconfigOPTIONS2CF14FA0"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/wallet/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiconfigwallet58E0CADD"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/wallet/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiconfigwalletOPTIONS8F2A3348"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/wallet/POST/ApiPermission.InfrastructureStackApiD473DFBA.POST..config.wallet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiconfigwalletPOSTApiPermissionInfrastructureStackApiD473DFBAPOSTconfigwalletC25211BD"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/wallet/POST/ApiPermission.Test.InfrastructureStackApiD473DFBA.POST..config.wallet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiconfigwalletPOSTApiPermissionTestInfrastructureStackApiD473DFBAPOSTconfigwallet886353A2"
+          }
+        ],
+        "/InfrastructureStack/Api/Default/config/wallet/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiconfigwalletPOSTFA5DFC18"
           }
         ],
         "/InfrastructureStack/ApiAuthorizer/Resource": [

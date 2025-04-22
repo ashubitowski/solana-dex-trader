@@ -8,10 +8,12 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import { createLambdaHandlers } from '../lambda-handlers';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -127,28 +129,8 @@ export class InfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create Lambda function for API using NodejsFunction (CDK v2)
-    const apiLambda = new nodejs.NodejsFunction(this, 'ApiLambdaHandler', {
-      entry: path.join(__dirname, '../lambda/api.ts'),
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      environment: {
-        USERS_TABLE: usersTable.tableName,
-        TOKENS_TABLE: tokensTable.tableName,
-        POSITIONS_TABLE: positionsTable.tableName,
-        SOLANA_RPC_ENDPOINT: 'https://api.mainnet-beta.solana.com'
-      },
-      logRetention: logs.RetentionDays.ONE_WEEK,
-      bundling: {
-        externalModules: ['@aws-sdk/*'],
-      },
-    });
-
-    // Grant Lambda permissions to access DynamoDB tables
-    usersTable.grantReadWriteData(apiLambda);
-    rateLimitTable.grantReadWriteData(apiLambda);
-    tokensTable.grantReadWriteData(apiLambda);
-    positionsTable.grantReadWriteData(apiLambda);
+    // Create Lambda functions for endpoints
+    const { tradeHandler, positionsHandler, walletHandler, logsHandler } = createLambdaHandlers(this);
 
     // Create API Gateway
     // const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayAccessLogs'); // Comment out for now
@@ -188,58 +170,50 @@ export class InfrastructureStack extends cdk.Stack {
     // const tokensResource = apiRoot.addResource('tokens');
     // const positionsResource = apiRoot.addResource('positions');
 
-    const lambdaIntegration = new apigateway.LambdaIntegration(apiLambda);
+    // Lambda integrations for each endpoint
+    const tradeIntegration = new apigateway.LambdaIntegration(tradeHandler);
+    const positionsIntegration = new apigateway.LambdaIntegration(positionsHandler);
+    const walletIntegration = new apigateway.LambdaIntegration(walletHandler);
+    const logsIntegration = new apigateway.LambdaIntegration(logsHandler);
 
     // usersResource.addMethod('GET', lambdaIntegration, {
     //   authorizer,
     //   authorizationType: apigateway.AuthorizationType.COGNITO,
     // });
     
-    // Add /tokens endpoint (directly under root)
-    const tokensResource = api.root.addResource('tokens');
-    tokensResource.addMethod('GET', lambdaIntegration, {
+    // Add /trade endpoint (POST)
+    const tradeResource = api.root.addResource('trade');
+    tradeResource.addMethod('POST', tradeIntegration, {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Add /positions endpoint (directly under root)
+    // Add /positions endpoint (GET)
     const positionsResource = api.root.addResource('positions');
-    positionsResource.addMethod('GET', lambdaIntegration, {
+    positionsResource.addMethod('GET', positionsIntegration, {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Add /auth endpoint (handles login/signup)
-    const authResource = api.root.addResource('auth');
-    authResource.addMethod('POST', lambdaIntegration, {
-        // No authorizer needed for login/signup actions handled within the lambda
-        authorizationType: apigateway.AuthorizationType.NONE, 
-    });
-
-    // Add /stats endpoint (assuming GET and needs auth)
-    const statsResource = api.root.addResource('stats'); // Assuming stats is at root/stats, adjust if needed
-    statsResource.addMethod('GET', lambdaIntegration, {
+    // Add /wallet endpoint (GET)
+    const walletResource = api.root.addResource('wallet');
+    walletResource.addMethod('GET', walletIntegration, {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Add /logs endpoint (assuming GET and needs auth)
-    const logsResource = api.root.addResource('logs'); 
-    logsResource.addMethod('GET', lambdaIntegration, {
+    // Add /logs endpoint (GET)
+    const logsResource = api.root.addResource('logs');
+    logsResource.addMethod('GET', logsIntegration, {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Add /wallet endpoint (assuming GET and needs auth)
-    const walletResource = api.root.addResource('wallet'); 
-    walletResource.addMethod('GET', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
-
-    // Add the /dashboard route (likely GET and needs authorization)
-    const dashboardResource = api.root.addResource('dashboard');
-    dashboardResource.addMethod('GET', lambdaIntegration, {
+    // Add /config/wallet endpoint (POST)
+    const { configWalletHandler } = createLambdaHandlers(this);
+    const configResource = api.root.addResource('config');
+    const walletConfigResource = configResource.addResource('wallet');
+    walletConfigResource.addMethod('POST', new apigateway.LambdaIntegration(configWalletHandler), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });

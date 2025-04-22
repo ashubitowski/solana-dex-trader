@@ -1,6 +1,6 @@
-# Solana DEX Trader - Pump Token Sniper
+# Sol Sniper
 
-A specialized trading bot for the Solana blockchain that monitors for newly created tokens (like those on pump.fun) and automatically trades them based on configurable strategies.
+A Solana token sniper bot for automated trading.
 
 ## Features
 
@@ -10,20 +10,15 @@ A specialized trading bot for the Solana blockchain that monitors for newly crea
 - Configurable trade parameters (amount, slippage, etc.)
 - Automatic take-profit and stop-loss functionality
 - Persistent caching to avoid duplicate processing
+- Secure user authentication with AWS Cognito
+- Serverless architecture using AWS CDK
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd solana-dex-trader
-
-# Install dependencies
+git clone https://github.com/yourusername/sol-sniper.git
+cd sol-sniper
 npm install
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your configuration
 ```
 
 ## Configuration
@@ -75,12 +70,52 @@ Using Alchemy provides several benefits:
 - More reliable connections
 - Better token age determination
 
-## Usage
+## Deployment
 
+The application is deployed using AWS CDK (Cloud Development Kit). Follow these steps to deploy:
+
+1. Install AWS CDK globally if you haven't already:
 ```bash
-# Run the pump token sniper
-npm run pump-sniper
+npm install -g aws-cdk
 ```
+
+2. Configure AWS credentials:
+```bash
+aws configure
+```
+
+3. Build and deploy the infrastructure:
+```bash
+# Install dependencies
+cd infrastructure
+npm install
+
+# Build frontend
+cd ../web
+npm install --legacy-peer-deps
+npm run build
+
+# Deploy infrastructure
+cd ../infrastructure
+npm run deploy
+```
+
+4. After deployment, you'll receive the following outputs:
+- Website URL (CloudFront distribution)
+- API Gateway endpoint
+- Cognito User Pool ID and Client ID
+
+5. Update the web application configuration in `web/public/config.js` with the outputs from the deployment.
+
+## Architecture
+
+The application uses a serverless architecture on AWS:
+- Frontend hosted on CloudFront/S3
+- API Gateway for backend endpoints
+- Lambda functions for business logic
+- DynamoDB for data persistence
+- Cognito for user authentication
+- CloudWatch for monitoring and logging
 
 ## Disclaimer
 

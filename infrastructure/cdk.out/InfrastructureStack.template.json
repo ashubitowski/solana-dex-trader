@@ -16,7 +16,7 @@
      },
      {
       "Key": "ForceUpdate",
-      "Value": "2025-04-22T02:04:16.238Z"
+      "Value": "2025-04-22T02:38:17.901Z"
      }
     ]
    },
@@ -599,6 +599,31 @@
          "Ref": "AWS::NoValue"
         }
        ]
+      },
+      {
+       "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:secretsmanager:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":secret:solana-dex-trader/wallet/*"
+         ]
+        ]
+       }
       }
      ],
      "Version": "2012-10-17"
@@ -619,7 +644,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-323399919537-us-east-2",
-     "S3Key": "b3a87874f81c1b67bf3eb3996777b6f43d8ab196ed3dbf7ef057b22650bcad56.zip"
+     "S3Key": "9ea95222dfb40b3071064b62941c2e344d0ebefc6b15c2acc9a5a2ddecd68096.zip"
     },
     "Environment": {
      "Variables": {
@@ -632,7 +657,8 @@
       "POSITIONS_TABLE": {
        "Ref": "PositionsTable41EA5B9F"
       },
-      "SOLANA_RPC_ENDPOINT": "https://api.mainnet-beta.solana.com"
+      "SOLANA_RPC_ENDPOINT": "https://api.mainnet-beta.solana.com",
+      "SECRET_NAME_PREFIX": "solana-dex-trader/wallet"
      }
     },
     "Handler": "index.handler",
@@ -642,7 +668,8 @@
       "Arn"
      ]
     },
-    "Runtime": "nodejs18.x"
+    "Runtime": "nodejs18.x",
+    "Timeout": 30
    },
    "DependsOn": [
     "ApiLambdaHandlerServiceRoleDefaultPolicy534EEB6C",
@@ -650,7 +677,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "InfrastructureStack/ApiLambdaHandler/Resource",
-    "aws:asset:path": "asset.b3a87874f81c1b67bf3eb3996777b6f43d8ab196ed3dbf7ef057b22650bcad56",
+    "aws:asset:path": "asset.9ea95222dfb40b3071064b62941c2e344d0ebefc6b15c2acc9a5a2ddecd68096",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -779,7 +806,7 @@
     "aws:cdk:path": "InfrastructureStack/Api/Resource"
    }
   },
-  "ApiDeploymentB17BE62De1ef80607a6a7fc552833753cf0092d6": {
+  "ApiDeploymentB17BE62Dbfbd581916aa26ba55cb72be102f9ad0": {
    "Type": "AWS::ApiGateway::Deployment",
    "Properties": {
     "Description": "Automatically created by the RestApi construct",
@@ -791,6 +818,11 @@
     "ApiauthOPTIONSC18B26B2",
     "ApiauthPOST8DF5B0DC",
     "Apiauth161C653C",
+    "ApiconfigOPTIONS2CF14FA0",
+    "Apiconfig62453FB1",
+    "ApiconfigwalletOPTIONS8F2A3348",
+    "ApiconfigwalletPOSTFA5DFC18",
+    "Apiconfigwallet58E0CADD",
     "ApidashboardGETEA284596",
     "ApidashboardOPTIONS9B1178C9",
     "ApidashboardA917D38E",
@@ -820,7 +852,7 @@
    "Type": "AWS::ApiGateway::Stage",
    "Properties": {
     "DeploymentId": {
-     "Ref": "ApiDeploymentB17BE62De1ef80607a6a7fc552833753cf0092d6"
+     "Ref": "ApiDeploymentB17BE62Dbfbd581916aa26ba55cb72be102f9ad0"
     },
     "RestApiId": {
      "Ref": "ApiF70053CD"
@@ -2153,6 +2185,265 @@
    },
    "Metadata": {
     "aws:cdk:path": "InfrastructureStack/Api/Default/dashboard/GET/Resource"
+   }
+  },
+  "Apiconfig62453FB1": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "config",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/Resource"
+   }
+  },
+  "ApiconfigOPTIONS2CF14FA0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": {
+         "Fn::Join": [
+          "",
+          [
+           "'https://",
+           {
+            "Fn::GetAtt": [
+             "Distribution830FAC52",
+             "DomainName"
+            ]
+           },
+           "'"
+          ]
+         ]
+        },
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "ResponseTemplates": {
+        "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiconfig62453FB1"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/OPTIONS/Resource"
+   }
+  },
+  "Apiconfigwallet58E0CADD": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "Apiconfig62453FB1"
+    },
+    "PathPart": "wallet",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/wallet/Resource"
+   }
+  },
+  "ApiconfigwalletOPTIONS8F2A3348": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": {
+         "Fn::Join": [
+          "",
+          [
+           "'https://",
+           {
+            "Fn::GetAtt": [
+             "Distribution830FAC52",
+             "DomainName"
+            ]
+           },
+           "'"
+          ]
+         ]
+        },
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "ResponseTemplates": {
+        "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiconfigwallet58E0CADD"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/wallet/OPTIONS/Resource"
+   }
+  },
+  "ApiconfigwalletPOSTApiPermissionInfrastructureStackApiD473DFBAPOSTconfigwalletC25211BD": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ApiLambdaHandlerCE925BB7",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:us-east-2:323399919537:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStageprod3EB9684E"
+       },
+       "/POST/config/wallet"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/wallet/POST/ApiPermission.InfrastructureStackApiD473DFBA.POST..config.wallet"
+   }
+  },
+  "ApiconfigwalletPOSTApiPermissionTestInfrastructureStackApiD473DFBAPOSTconfigwallet886353A2": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ApiLambdaHandlerCE925BB7",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:us-east-2:323399919537:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/config/wallet"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/wallet/POST/ApiPermission.Test.InfrastructureStackApiD473DFBA.POST..config.wallet"
+   }
+  },
+  "ApiconfigwalletPOSTFA5DFC18": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "ApiAuthorizer68095F41"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "ApiLambdaHandlerCE925BB7",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiconfigwallet58E0CADD"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InfrastructureStack/Api/Default/config/wallet/POST/Resource"
    }
   },
   "ApiAuthorizer68095F41": {
