@@ -3,37 +3,70 @@ import './index.css';
 
 function App() {
   return (
-    <div className="flex h-screen bg-background font-sans">
+    <div className="flex h-screen bg-gray-50 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 bg-sidebar text-white flex flex-col justify-between">
+      <aside className="w-64 bg-gray-900 text-white flex flex-col justify-between shadow-lg">
         <div>
-          <div className="px-6 py-6 text-2xl font-bold tracking-wide">Solana DEX Trader</div>
-          <nav className="mt-4">
-            <ul>
-              <li className="px-6 py-3 bg-primary rounded-l-lg font-semibold">Dashboard</li>
-              <li className="px-6 py-3 hover:bg-primary/70 cursor-pointer">Tokens</li>
-              <li className="px-6 py-3 hover:bg-primary/70 cursor-pointer">Positions</li>
-              <li className="px-6 py-3 hover:bg-primary/70 cursor-pointer">Logs</li>
-              <li className="px-6 py-3 hover:bg-primary/70 cursor-pointer">Configuration</li>
+          <div className="px-6 py-6 text-2xl font-bold tracking-wide leading-tight">Solana DEX Trader
+            <div className="text-xs font-normal text-gray-400">Pump Token Sniper</div>
+          </div>
+          <nav className="mt-2">
+            <ul className="space-y-1">
+              <li className="flex items-center px-6 py-3 bg-blue-700 rounded-l-lg font-semibold">
+                <span className="mr-2">📊</span> Dashboard
+              </li>
+              <li className="flex items-center px-6 py-3 hover:bg-blue-600/70 cursor-pointer rounded-l-lg">
+                <span className="mr-2">🪙</span> Tokens
+              </li>
+              <li className="flex items-center px-6 py-3 hover:bg-blue-600/70 cursor-pointer rounded-l-lg">
+                <span className="mr-2">📈</span> Positions
+              </li>
+              <li className="flex items-center px-6 py-3 hover:bg-blue-600/70 cursor-pointer rounded-l-lg">
+                <span className="mr-2">📄</span> Logs
+              </li>
+              <li className="flex items-center px-6 py-3 hover:bg-blue-600/70 cursor-pointer rounded-l-lg">
+                <span className="mr-2">⚙️</span> Configuration
+              </li>
             </ul>
           </nav>
         </div>
-        <div className="px-6 py-4 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 bg-success rounded-full" />
-          <span className="text-sm text-success">Status: Connected</span>
+        <div className="px-6 py-4 flex items-center gap-2 border-t border-gray-800">
+          <span className="inline-block w-2 h-2 bg-green-400 rounded-full" />
+          <span className="text-sm text-green-400">Status: Connected</span>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto bg-background">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-textMain mb-2">Dashboard</h1>
-          <div className="text-textSecondary">Pump Token Sniper</div>
+      <main className="flex-1 p-10 overflow-y-auto bg-gray-50">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-0">Dashboard</h1>
+            <div className="text-gray-500">Wallet Status</div>
+          </div>
+          <button className="px-4 py-1.5 bg-white border border-blue-500 text-blue-600 rounded hover:bg-blue-50 text-sm font-semibold transition">⟳ Refresh</button>
         </div>
+
+        {/* Wallet Status Card */}
+        <div className="bg-white rounded-lg shadow-card p-6 flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <div className="text-gray-500 text-sm">Address:</div>
+            <div className="font-mono text-gray-800">8xpG4...YE6P</div>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <div className="text-gray-500 text-sm">Balance:</div>
+            <div className="font-mono text-gray-800">10.5432 SOL</div>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <div className="text-gray-500 text-sm">RPC Endpoint:</div>
+            <div className="font-mono text-gray-800">https://api.mainnet-beta.solana.com</div>
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-card p-6">
-            <div className="text-textSecondary text-sm">Total Trades</div>
-            <div className="text-2xl font-bold text-primary">15</div>
+          <div className="bg-white rounded-lg shadow-card p-6 flex flex-col items-center">
+            <div className="text-gray-500 text-sm">Total Trades</div>
+            <div className="text-2xl font-bold text-blue-700">15</div>
           </div>
           <div className="bg-white rounded-lg shadow-card p-6">
             <div className="text-textSecondary text-sm">Profitable Trades</div>
