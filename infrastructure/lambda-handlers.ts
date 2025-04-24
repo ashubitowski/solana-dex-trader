@@ -13,6 +13,7 @@ export function createLambdaHandlers(scope: Construct) {
     handler: 'handler',
     environment: lambdaEnv,
     timeout: Duration.seconds(30),
+    bundling: { forceDockerBundling: false },
   });
 
   const positionsHandler = new NodejsFunction(scope, 'PositionsHandler', {
@@ -20,6 +21,7 @@ export function createLambdaHandlers(scope: Construct) {
     handler: 'handler',
     environment: lambdaEnv,
     timeout: Duration.seconds(10),
+    bundling: { forceDockerBundling: false },
   });
 
   const walletHandler = new NodejsFunction(scope, 'WalletHandler', {
@@ -27,6 +29,7 @@ export function createLambdaHandlers(scope: Construct) {
     handler: 'handler',
     environment: lambdaEnv,
     timeout: Duration.seconds(10),
+    bundling: { forceDockerBundling: false },
   });
 
   const logsHandler = new NodejsFunction(scope, 'LogsHandler', {
@@ -34,6 +37,7 @@ export function createLambdaHandlers(scope: Construct) {
     handler: 'handler',
     environment: lambdaEnv,
     timeout: Duration.seconds(10),
+    bundling: { forceDockerBundling: false },
   });
 
   const configWalletHandler = new NodejsFunction(scope, 'ConfigWalletHandler', {
@@ -41,6 +45,7 @@ export function createLambdaHandlers(scope: Construct) {
     handler: 'handler',
     environment: lambdaEnv,
     timeout: Duration.seconds(10),
+    bundling: { forceDockerBundling: false },
   });
 
   return {

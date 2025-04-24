@@ -130,7 +130,7 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // Create Lambda functions for endpoints
-    const { tradeHandler, positionsHandler, walletHandler, logsHandler } = createLambdaHandlers(this);
+    const { tradeHandler, positionsHandler, walletHandler, logsHandler, configWalletHandler } = createLambdaHandlers(this);
 
     // Create API Gateway
     // const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayAccessLogs'); // Comment out for now
@@ -210,7 +210,6 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // Add /config/wallet endpoint (POST)
-    const { configWalletHandler } = createLambdaHandlers(this);
     const configResource = api.root.addResource('config');
     const walletConfigResource = configResource.addResource('wallet');
     walletConfigResource.addMethod('POST', new apigateway.LambdaIntegration(configWalletHandler), {
