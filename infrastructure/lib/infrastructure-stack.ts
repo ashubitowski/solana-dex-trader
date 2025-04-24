@@ -33,15 +33,6 @@ export class InfrastructureStack extends cdk.Stack {
     // Grant the OAI read permissions on the S3 bucket
     websiteBucket.grantRead(oai);
 
-    // Deploy React build to S3 and invalidate CloudFront
-    new s3deploy.BucketDeployment(this, 'DeployWebsite', {
-      sources: [s3deploy.Source.asset(path.join(__dirname, '../../web/build'))],
-      destinationBucket: websiteBucket,
-      distribution,
-      distributionPaths: ['/*'],
-      prune: true,
-    });
-
     // Create a CloudFront distribution
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
