@@ -16,6 +16,7 @@ module.exports = {
         "https": false,
         "zlib": false,
         "process": require.resolve("process/browser"),
+        "vm": require.resolve("vm-browserify"),
       };
 
       // Add ProvidePlugin to automatically provide Buffer and process
