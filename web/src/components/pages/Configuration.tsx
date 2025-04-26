@@ -3,6 +3,7 @@ import { useWalletContext } from '../../contexts/WalletContext';
 import { configApi } from '../../services/api';
 import { validateConfig } from '../../utils/validation';
 import { notify } from '../../components/Notifications';
+import { getUserData, updateUserData } from '../../services/auth';
 
 const Configuration: React.FC = () => {
   const { publicKey } = useWalletContext();
@@ -33,9 +34,25 @@ const Configuration: React.FC = () => {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
-        const data = await configApi.getConfig();
-        setConfig(prev => ({ ...prev, ...data }));
-        notify.success('Configuration loaded successfully');
+        
+        // First try to get user-specific configuration from DynamoDB
+        const userData = await getUserData();
+        
+        if (userData && userData.settings) {
+          // Use user-specific settings from DynamoDB
+          setConfig(prev => ({ 
+            ...prev, 
+            ...userData.settings,
+            walletAddress: userData.walletAddress || publicKey || '8xpG4...YE6P',
+            privateKeySecured: !!userData.privateKeySecured
+          }));
+          notify.success('User configuration loaded successfully');
+        } else {
+          // Fallback to general configuration API
+          const data = await configApi.getConfig();
+          setConfig(prev => ({ ...prev, ...data }));
+          notify.success('Configuration loaded successfully');
+        }
       } catch (error) {
         console.error('Error fetching configuration:', error);
         notify.error('Failed to load configuration');
@@ -45,7 +62,7 @@ const Configuration: React.FC = () => {
     };
     
     fetchConfig();
-  }, []);
+  }, [publicKey]);
   
   // Update wallet address when connected
   useEffect(() => {
@@ -89,7 +106,27 @@ const Configuration: React.FC = () => {
     
     try {
       setIsSaving(true);
+      
+      // Save to user-specific settings in DynamoDB
+      await updateUserData({
+        settings: {
+          minimumLiquidity: config.minimumLiquidity,
+          tradeAmount: config.tradeAmount,
+          slippageTolerance: config.slippageTolerance,
+          maxActivePositions: config.maxActivePositions,
+          takeProfit: config.takeProfit,
+          stopLoss: config.stopLoss,
+          autoSell: config.autoSell,
+          autoTrade: config.autoTrade,
+          rpcEndpoint: config.rpcEndpoint
+        },
+        walletAddress: config.walletAddress,
+        privateKeySecured: config.privateKeySecured
+      });
+      
+      // Also save to general configuration API for backward compatibility
       await configApi.saveConfig(config);
+      
       setIsSaving(false);
       notify.success('Configuration saved successfully!');
     } catch (error) {

@@ -15,7 +15,7 @@ declare global {
 const API_BASE_URL = window.config?.apiEndpoint || 'https://p0ovyz3y83.execute-api.us-east-2.amazonaws.com/prod/';
 
 // Generic API request function with authentication
-const apiRequest = async (endpoint: string, method: string = 'GET', data?: any) => {
+export const apiRequest = async (endpoint: string, method: string = 'GET', data?: any) => {
   try {
     const token = await getAuthToken();
     
