@@ -1,5 +1,17 @@
 import { getAuthToken } from './auth';
 
+// Add type declaration for window.config
+declare global {
+  interface Window {
+    config?: {
+      apiEndpoint?: string;
+      userPoolId?: string;
+      clientId?: string;
+      rpcEndpoint?: string;
+    };
+  }
+}
+
 const API_BASE_URL = window.config?.apiEndpoint || 'https://p0ovyz3y83.execute-api.us-east-2.amazonaws.com/prod/';
 
 // Generic API request function with authentication

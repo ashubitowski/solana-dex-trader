@@ -1,30 +1,30 @@
-import { Auth } from 'aws-amplify';
+import { fetchAuthSession, signIn as amplifySignIn, signOut as amplifySignOut, getCurrentUser as amplifyGetCurrentUser } from 'aws-amplify/auth';
 
 // Get the current authenticated user's JWT token
 export const getAuthToken = async () => {
   try {
-    const session = await Auth.currentSession();
-    return session.getIdToken().getJwtToken();
+    const session = await fetchAuthSession();
+    return session.tokens?.idToken?.toString() || null;
   } catch (error) {
     console.error('Error getting auth token:', error);
-    throw error;
+    return null;
   }
 };
 
-// Check if user is authenticated
+// Check if the user is authenticated
 export const isAuthenticated = async () => {
   try {
-    await Auth.currentSession();
-    return true;
+    const user = await amplifyGetCurrentUser();
+    return !!user;
   } catch (error) {
     return false;
   }
 };
 
-// Sign in user
-export const signIn = async (username, password) => {
+// Sign in with username and password
+export const signIn = async (username: string, password: string) => {
   try {
-    const user = await Auth.signIn(username, password);
+    const user = await amplifySignIn({ username, password });
     return user;
   } catch (error) {
     console.error('Error signing in:', error);
@@ -32,10 +32,10 @@ export const signIn = async (username, password) => {
   }
 };
 
-// Sign out user
+// Sign out the current user
 export const signOut = async () => {
   try {
-    await Auth.signOut();
+    await amplifySignOut();
   } catch (error) {
     console.error('Error signing out:', error);
     throw error;

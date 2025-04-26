@@ -5,8 +5,8 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  BackpackWalletAdapter,
-  CoinbaseWalletAdapter
+  LedgerWalletAdapter,
+  TorusWalletAdapter
 } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 
@@ -19,13 +19,13 @@ interface WalletContextProviderProps {
 
 export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children }) => {
   // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'
-  const network = WalletAdapterNetwork.MainnetBeta;
+  const network = WalletAdapterNetwork.Mainnet;
 
   // You can also provide a custom RPC endpoint
   const endpoint = useMemo(() => {
     // Use the RPC endpoint from the config if available
-    if (window.config?.rpcEndpoint) {
-      return window.config.rpcEndpoint;
+    if ((window as any).config?.rpcEndpoint) {
+      return (window as any).config.rpcEndpoint;
     }
     return clusterApiUrl(network);
   }, [network]);
@@ -35,10 +35,10 @@ export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children
     () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
-      new CoinbaseWalletAdapter()
+      new LedgerWalletAdapter(),
+      new TorusWalletAdapter()
     ],
-    [network]
+    []
   );
 
   return (

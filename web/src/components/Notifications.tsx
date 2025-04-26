@@ -28,7 +28,7 @@ export const notify = {
   update: (toastId: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     toast.update(toastId, {
       render: message,
-      type: toast.TYPE[type.toUpperCase() as keyof typeof toast.TYPE],
+      type: type,
       isLoading: false,
       autoClose: 5000
     });
