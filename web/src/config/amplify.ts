@@ -13,7 +13,7 @@ export const configureAmplify = () => {
     Auth: {
       Cognito: {
         userPoolId: config.userPoolId,
-        userPoolClientId: config.userPoolClientId,
+        userPoolClientId: config.clientId, // Match the property name from deploy.sh
         loginWith: {
           username: true
         }
