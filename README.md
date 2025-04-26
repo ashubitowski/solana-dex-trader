@@ -198,7 +198,7 @@ graph TB
   end
   subgraph AWS Cloud
     S3["S3 Bucket\n(Static Hosting)"]
-    CF["CloudFront CDN\n(AWS Account: 323399919537)"]
+    CF["CloudFront CDN"]
     APIGW["API Gateway\n(REST)"]
     LAMBDA_TRADE["Lambda: TradeHandler\nv1, Node.js 16"]
     LAMBDA_POS["Lambda: PositionsHandler\nv1, Node.js 16"]
@@ -209,7 +209,7 @@ graph TB
     DDB_TOKENS["DynamoDB: TokensTable\nus-east-2"]
     DDB_POS["DynamoDB: PositionsTable\nus-east-2"]
     DDB_RATE["DynamoDB: RateLimitTable\nus-east-2"]
-    COGNITO["Cognito User Pool\nus-east-2_2NKnlyBUD"]
+    COGNITO["Cognito User Pool\nus-east-2"]
     CWATCH["CloudWatch Logs"]
     EXT_SOLANA["Solana RPC/Alchemy/Helius/Birdeye"]
   end
