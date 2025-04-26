@@ -250,8 +250,8 @@ const Configuration: React.FC = () => {
       </div>
 
       {/* Auto Features */}
-      <div className="bg-white rounded-lg shadow-card p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Auto Features</h2>
+      <div className="bg-white rounded-lg shadow-card p-4 md:p-6 mb-6">
+        <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-4">Auto Features</h2>
         <div className="space-y-4">
           <div className="flex items-center">
             <input 
@@ -281,9 +281,9 @@ const Configuration: React.FC = () => {
       </div>
 
       {/* Wallet Settings */}
-      <div className="bg-white rounded-lg shadow-card p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Wallet Settings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+      <div className="bg-white rounded-lg shadow-card p-4 md:p-6 mb-6">
+        <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-4">Wallet Settings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 md:gap-x-8 gap-y-4 md:gap-y-6">
           <div>
             <label className="block text-gray-700 font-medium mb-2">Wallet Address</label>
             <input 
@@ -321,10 +321,10 @@ const Configuration: React.FC = () => {
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-center md:justify-end">
         <button 
           onClick={handleSaveConfig}
-          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="w-full md:w-auto px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           disabled={isSaving}
         >
           {isSaving ? 'Saving...' : 'Save Configuration'}

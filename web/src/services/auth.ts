@@ -1,4 +1,12 @@
-import { fetchAuthSession, signIn as amplifySignIn, signOut as amplifySignOut, getCurrentUser as amplifyGetCurrentUser, signUp as amplifySignUp } from 'aws-amplify/auth';
+import { 
+  fetchAuthSession, 
+  signIn as amplifySignIn, 
+  signOut as amplifySignOut, 
+  getCurrentUser as amplifyGetCurrentUser, 
+  signUp as amplifySignUp,
+  resetPassword,
+  confirmResetPassword
+} from 'aws-amplify/auth';
 import { apiRequest } from './api';
 
 // Get the current authenticated user's JWT token
@@ -132,6 +140,32 @@ export const signOut = async () => {
     await amplifySignOut();
   } catch (error) {
     console.error('Error signing out:', error);
+    throw error;
+  }
+};
+
+// Forgot password - sends verification code to email
+export const forgotPassword = async (username: string) => {
+  try {
+    const result = await resetPassword({ username });
+    return result;
+  } catch (error) {
+    console.error('Error initiating password reset:', error);
+    throw error;
+  }
+};
+
+// Confirm forgot password - verifies code and sets new password
+export const confirmForgotPassword = async (username: string, confirmationCode: string, newPassword: string) => {
+  try {
+    const result = await confirmResetPassword({
+      username,
+      confirmationCode,
+      newPassword
+    });
+    return result;
+  } catch (error) {
+    console.error('Error confirming password reset:', error);
     throw error;
   }
 };
