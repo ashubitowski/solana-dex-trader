@@ -125,15 +125,226 @@ const Logs = () => (
   </>
 );
 
-const Configuration = () => (
-  <>
-    <h1 className="text-3xl font-bold text-gray-800 mb-4">Configuration</h1>
-    <div className="bg-white rounded-lg shadow-card p-6">
-      <h2 className="text-lg font-bold text-textMain mb-4">System Settings</h2>
-      <p>Configure your trading parameters and system settings here.</p>
-    </div>
-  </>
-);
+const Configuration = () => {
+  const [config, setConfig] = React.useState({
+    // Trading parameters
+    minimumLiquidity: 0.5,
+    tradeAmount: 0.1,
+    slippageTolerance: 2.5,
+    maxActivePositions: 5,
+    takeProfit: 50,
+    stopLoss: 25,
+    // Auto features
+    autoSell: true,
+    autoTrade: true,
+    // Wallet settings
+    walletAddress: '8xpG4...YE6P',
+    privateKeySecured: true,
+    rpcEndpoint: 'https://api.mainnet-beta.solana.com'
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setConfig(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : type === 'number' ? parseFloat(value) : value
+    }));
+  };
+
+  const handleSaveConfig = () => {
+    // Here you would typically save to backend API
+    console.log('Saving configuration:', config);
+    alert('Configuration saved successfully!');
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-3xl font-bold text-gray-800">Bot Configuration</h1>
+      </div>
+
+      {/* Trading Parameters */}
+      <div className="bg-white rounded-lg shadow-card p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+          {/* Minimum Liquidity */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Minimum Liquidity (SOL)</label>
+            <input 
+              type="number" 
+              name="minimumLiquidity"
+              value={config.minimumLiquidity}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Minimum SOL in liquidity pool to consider buying</p>
+          </div>
+
+          {/* Trade Amount */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Trade Amount (SOL)</label>
+            <input 
+              type="number" 
+              name="tradeAmount"
+              value={config.tradeAmount}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Amount of SOL to use for each trade</p>
+          </div>
+
+          {/* Slippage Tolerance */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Slippage Tolerance (%)</label>
+            <input 
+              type="number" 
+              name="slippageTolerance"
+              value={config.slippageTolerance}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Maximum acceptable price difference due to slippage</p>
+          </div>
+
+          {/* Max Active Positions */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Max Active Positions</label>
+            <input 
+              type="number" 
+              name="maxActivePositions"
+              value={config.maxActivePositions}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Maximum number of active positions allowed</p>
+          </div>
+
+          {/* Take Profit */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Take Profit (%)</label>
+            <input 
+              type="number" 
+              name="takeProfit"
+              value={config.takeProfit}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Percentage increase to trigger sell</p>
+          </div>
+
+          {/* Stop Loss */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Stop Loss (%)</label>
+            <input 
+              type="number" 
+              name="stopLoss"
+              value={config.stopLoss}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-sm text-gray-500 mt-1">Percentage decrease to trigger sell</p>
+          </div>
+        </div>
+
+        {/* Auto features */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <div className="flex items-center">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                name="autoSell"
+                checked={config.autoSell} 
+                onChange={handleInputChange}
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span className="ml-3 text-gray-700 font-medium">Auto Sell</span>
+            </label>
+            <p className="text-sm text-gray-500 ml-4">Automatically sell based on take profit/stop loss</p>
+          </div>
+          
+          <div className="flex items-center">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                name="autoTrade"
+                checked={config.autoTrade} 
+                onChange={handleInputChange}
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span className="ml-3 text-gray-700 font-medium">Auto Trade</span>
+            </label>
+            <p className="text-sm text-gray-500 ml-4">Automatically trade newly detected tokens</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Wallet Configuration */}
+      <div className="bg-white rounded-lg shadow-card p-6 mb-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-4">Wallet Configuration</h2>
+        
+        <div className="grid grid-cols-1 gap-y-4">
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Wallet Address</label>
+            <div className="flex">
+              <input 
+                type="text" 
+                name="walletAddress"
+                value={config.walletAddress}
+                onChange={handleInputChange}
+                className="flex-grow p-2 border border-gray-300 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                readOnly
+              />
+              <button className="bg-gray-100 text-gray-700 px-4 rounded-r border border-l-0 border-gray-300 hover:bg-gray-200">
+                Change
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">Private Key Status</label>
+            <div className="flex items-center">
+              <span className="mr-2">
+                {config.privateKeySecured ? 
+                  <span className="text-green-500">🔒 Secured</span> : 
+                  <span className="text-red-500">🔓 Not Secured</span>
+                }
+              </span>
+              <button className="text-sm text-blue-600 hover:text-blue-800">
+                {config.privateKeySecured ? "Update Key" : "Secure Key"}
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-gray-700 font-medium mb-2">RPC Endpoint</label>
+            <select 
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              name="rpcEndpoint"
+              value={config.rpcEndpoint}
+              onChange={(e) => setConfig({...config, rpcEndpoint: e.target.value})}
+            >
+              <option value="https://api.mainnet-beta.solana.com">Solana Mainnet (Default)</option>
+              <option value="https://api.devnet.solana.com">Solana Devnet</option>
+              <option value="https://solana-api.projectserum.com">Project Serum</option>
+              <option value="https://rpc.ankr.com/solana">Ankr</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <button 
+          onClick={handleSaveConfig}
+          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          Save Configuration
+        </button>
+      </div>
+    </>
+  );
+};
 
 function App() {
   return (
