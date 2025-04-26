@@ -6,13 +6,14 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 export const configureAmplify = () => {
   // Get configuration from window.config (set in config.js)
   const config = (window as any).config || {};
-  
+  console.log('Loaded window.config:', config);
+
   // Configure Amplify with Cognito settings
   Amplify.configure({
     Auth: {
       Cognito: {
         userPoolId: config.userPoolId,
-        userPoolClientId: config.clientId,
+        userPoolClientId: config.userPoolClientId,
         loginWith: {
           username: true
         }
