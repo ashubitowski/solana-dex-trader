@@ -34,6 +34,7 @@ function App() {
           <span className="inline-block w-2 h-2 bg-green-400 rounded-full" />
           <span className="text-sm text-green-400">Status: Connected</span>
         </div>
+        <div className="px-6 py-2 text-xs text-gray-400">Deployed at 2025-04-23 22:33 EDT</div>
       </aside>
 
       {/* Main Content */}

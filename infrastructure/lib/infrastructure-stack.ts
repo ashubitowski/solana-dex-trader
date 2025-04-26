@@ -53,13 +53,14 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // Deploy the website content
-    // new s3deploy.BucketDeployment(this, 'DeployWebsite', {
-    //   sources: [s3deploy.Source.asset(path.join(__dirname, '../../web-server/public'))],
-    //   destinationBucket: websiteBucket,
-    //   distribution,
-    //   distributionPaths: ['/*'],
-    //   prune: true, 
-    // });
+    // Deploy the latest web/build directory to the S3 bucket and invalidate CloudFront
+    new s3deploy.BucketDeployment(this, 'DeployWebsite', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../../web/build'))],
+      destinationBucket: websiteBucket,
+      distribution,
+      distributionPaths: ['/*'],
+      prune: true, // Remove files from bucket that are not in the build folder
+    });
 
     // Create a Cognito User Pool
     const userPool = new cognito.UserPool(this, 'UserPool', {
