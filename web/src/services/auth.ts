@@ -1,34 +1,19 @@
-// Mock storage for user data
-const mockUsers: Record<string, { password: string, userData: any }> = {
-  'test@example.com': { 
-    password: 'Password123', 
-    userData: {
-      email: 'test@example.com',
-      walletAddress: '8xpG4...YE6P',
-      settings: {
-        minimumLiquidity: 0.5,
-        tradeAmount: 0.1,
-        slippageTolerance: 2.5,
-        maxActivePositions: 5,
-        takeProfit: 50,
-        stopLoss: 25,
-        autoSell: true,
-        autoTrade: true,
-        rpcEndpoint: 'https://api.mainnet-beta.solana.com'
-      }
-    }
-  }
-};
-
-// Mock token storage
-let mockAuthToken: string | null = null;
-let mockCurrentUser: string | null = null;
+import { 
+  fetchAuthSession, 
+  signIn as amplifySignIn, 
+  signOut as amplifySignOut, 
+  getCurrentUser as amplifyGetCurrentUser, 
+  signUp as amplifySignUp,
+  resetPassword,
+  confirmResetPassword
+} from 'aws-amplify/auth';
+import { apiRequest } from './api';
 
 // Get the current authenticated user's JWT token
 export const getAuthToken = async () => {
   try {
-    // Return mock token if available
-    return mockAuthToken || null;
+    const session = await fetchAuthSession();
+    return session.tokens?.idToken?.toString() || null;
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
@@ -38,11 +23,8 @@ export const getAuthToken = async () => {
 // Get the current user's ID from Cognito
 export const getUserId = async () => {
   try {
-    // Return mock user if available
-    if (mockCurrentUser) {
-      return mockCurrentUser;
-    }
-    return null;
+    const user = await amplifyGetCurrentUser();
+    return user.userId || user.username;
   } catch (error) {
     console.error('Error getting user ID:', error);
     return null;
@@ -52,11 +34,8 @@ export const getUserId = async () => {
 // Get the current authenticated user
 export const getCurrentUser = async () => {
   try {
-    // Return mock user if available
-    if (mockCurrentUser) {
-      return { username: mockCurrentUser };
-    }
-    return null;
+    const user = await amplifyGetCurrentUser();
+    return user;
   } catch (error) {
     console.error('Error getting current user:', error);
     return null;
@@ -66,29 +45,19 @@ export const getCurrentUser = async () => {
 // Get the current user's data from DynamoDB
 export const getUserData = async () => {
   try {
-    // Return mock user data if available
-    if (mockCurrentUser && mockUsers[mockCurrentUser]) {
-      return mockUsers[mockCurrentUser].userData;
-    }
-    return null;
+    const data = await apiRequest('/users/me', 'GET');
+    return data;
   } catch (error) {
     console.error('Error getting user data:', error);
     return null;
   }
 };
 
-// Update the user's data in DynamoDB
+// Update user data in our API
 export const updateUserData = async (userData: any) => {
   try {
-    // Update mock user data if available
-    if (mockCurrentUser && mockUsers[mockCurrentUser]) {
-      mockUsers[mockCurrentUser].userData = {
-        ...mockUsers[mockCurrentUser].userData,
-        ...userData
-      };
-      return mockUsers[mockCurrentUser].userData;
-    }
-    throw new Error('User not found');
+    const data = await apiRequest('/users/me', 'PUT', userData);
+    return data;
   } catch (error) {
     console.error('Error updating user data:', error);
     throw error;
@@ -108,15 +77,22 @@ export const isAuthenticated = async () => {
 // Sign up a new user
 export const signUp = async (username: string, password: string) => {
   try {
-    // Check if user already exists
-    if (mockUsers[username]) {
-      throw new Error('User already exists');
-    }
-    
-    // Create new user in mock storage
-    mockUsers[username] = {
+    // Sign up with Cognito
+    const { userId, isSignUpComplete, nextStep } = await amplifySignUp({
+      username,
       password,
-      userData: {
+      options: {
+        autoSignIn: false,
+        userAttributes: {
+          email: username
+        }
+      }
+    });
+    
+    // If sign up is complete, create a user record in our database
+    if (isSignUpComplete) {
+      // Create user in our database
+      await apiRequest('/users', 'POST', {
         email: username,
         walletAddress: '',
         settings: {
@@ -130,13 +106,8 @@ export const signUp = async (username: string, password: string) => {
           autoTrade: true,
           rpcEndpoint: 'https://api.mainnet-beta.solana.com'
         }
-      }
-    };
-    
-    // Return success
-    const userId = `mock-user-${Date.now()}`;
-    const isSignUpComplete = true;
-    const nextStep = { signUpStep: 'DONE' };
+      });
+    }
     
     return { userId, isSignUpComplete, nextStep };
   } catch (error) {
@@ -148,29 +119,15 @@ export const signUp = async (username: string, password: string) => {
 // Sign in with username and password
 export const signIn = async (username: string, password: string) => {
   try {
-    // Check if user exists in mock storage
-    const user = mockUsers[username];
-    if (!user) {
-      throw new Error('User not found');
+    const { isSignedIn, nextStep } = await amplifySignIn({ username, password });
+    
+    if (isSignedIn) {
+      // Get user data from our API
+      const userData = await getUserData();
+      return { isSignedIn, nextStep, userData };
     }
     
-    // Check password
-    if (user.password !== password) {
-      throw new Error('Incorrect password');
-    }
-    
-    // Set mock token and current user
-    mockAuthToken = `mock-token-${Date.now()}`;
-    mockCurrentUser = username;
-    
-    // Return success
-    const isSignedIn = true;
-    const nextStep = { signInStep: 'DONE' };
-    
-    // Get user data
-    const userData = user.userData;
-    
-    return { isSignedIn, nextStep, userData };
+    return { isSignedIn, nextStep };
   } catch (error) {
     console.error('Error signing in:', error);
     throw error;
@@ -180,9 +137,7 @@ export const signIn = async (username: string, password: string) => {
 // Sign out the current user
 export const signOut = async () => {
   try {
-    // Clear mock token and current user
-    mockAuthToken = null;
-    mockCurrentUser = null;
+    await amplifySignOut();
   } catch (error) {
     console.error('Error signing out:', error);
     throw error;
@@ -192,13 +147,8 @@ export const signOut = async () => {
 // Forgot password - sends verification code to email
 export const forgotPassword = async (username: string) => {
   try {
-    // Check if user exists in mock storage
-    if (!mockUsers[username]) {
-      throw new Error('User not found');
-    }
-    
-    // Return mock result
-    return { isPasswordReset: false, nextStep: { resetPasswordStep: 'CONFIRM_RESET_PASSWORD_WITH_CODE' } };
+    const result = await resetPassword({ username });
+    return result;
   } catch (error) {
     console.error('Error initiating password reset:', error);
     throw error;
@@ -208,21 +158,12 @@ export const forgotPassword = async (username: string) => {
 // Confirm forgot password - verifies code and sets new password
 export const confirmForgotPassword = async (username: string, confirmationCode: string, newPassword: string) => {
   try {
-    // Check if user exists in mock storage
-    if (!mockUsers[username]) {
-      throw new Error('User not found');
-    }
-    
-    // Verify confirmation code (for mock, any code '123456' is valid)
-    if (confirmationCode !== '123456') {
-      throw new Error('Invalid confirmation code');
-    }
-    
-    // Update password
-    mockUsers[username].password = newPassword;
-    
-    // Return mock result
-    return {};
+    const result = await confirmResetPassword({
+      username,
+      confirmationCode,
+      newPassword
+    });
+    return result;
   } catch (error) {
     console.error('Error confirming password reset:', error);
     throw error;
