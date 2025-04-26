@@ -3,7 +3,7 @@ import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import {
-  PhantomWalletAdapter,
+  // Remove PhantomWalletAdapter as it's now registered as a standard wallet
   SolflareWalletAdapter,
   LedgerWalletAdapter,
   TorusWalletAdapter
@@ -33,7 +33,7 @@ export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children
   // @solana/wallet-adapter-wallets includes all the adapters but supports tree shaking
   const wallets = useMemo(
     () => [
-      new PhantomWalletAdapter(),
+      // Phantom is now registered as a standard wallet, so we don't need to include it manually
       new SolflareWalletAdapter(),
       new LedgerWalletAdapter(),
       new TorusWalletAdapter()
