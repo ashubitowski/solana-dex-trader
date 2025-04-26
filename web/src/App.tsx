@@ -139,8 +139,8 @@ function App() {
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col justify-between shadow-lg">
-        <div>
+      <aside className="w-64 bg-gray-900 text-white flex flex-col shadow-lg">
+        <div className="flex-grow">
           <div className="px-6 py-6 text-2xl font-bold tracking-wide leading-tight">Solana DEX Trader
             <div className="text-xs font-normal text-gray-400">Pump Token Sniper</div>
           </div>
@@ -184,11 +184,10 @@ function App() {
             </ul>
           </nav>
         </div>
-        <div className="px-6 py-4 flex items-center gap-2 border-t border-gray-800">
+        <div className="mt-auto px-6 py-4 flex items-center gap-2 border-t border-gray-800">
           <span className="inline-block w-2 h-2 bg-green-400 rounded-full" />
           <span className="text-sm text-green-400">Status: Connected</span>
         </div>
-        <div className="px-6 py-2 text-xs text-gray-400">Deployed at 2025-04-23 22:33 EDT</div>
       </aside>
 
       {/* Main Content */}
