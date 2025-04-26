@@ -33,35 +33,43 @@ const apiRequest = async (endpoint: string, method: string = 'GET', data?: any) 
       options.body = JSON.stringify(data);
     }
     
-    // For development/testing, provide mock data if API is not available
-    if (process.env.NODE_ENV !== 'production' || window.location.hostname === 'd3rntcg47zepho.cloudfront.net') {
-      // Check if we're trying to access a protected endpoint without authentication
-      if (!token) {
-        console.warn('No authentication token available, using mock data');
+    // Only use mock data when API is unavailable AND we're in development or on the CloudFront domain
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+      
+      if (response.ok) {
+        return await response.json();
+      }
+      
+      // If we get a 401/403 error, we need to redirect to login
+      if (response.status === 401 || response.status === 403) {
+        // If we're not already on the login page, redirect to it
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        throw new Error('Authentication required');
+      }
+      
+      // For other errors, use mock data in dev or on CloudFront
+      if (process.env.NODE_ENV !== 'production' || window.location.hostname === 'd3rntcg47zepho.cloudfront.net') {
+        console.warn(`API request failed with status ${response.status}, using mock data`);
         return getMockData(endpoint);
       }
       
-      try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-        if (!response.ok) {
-          console.warn(`API request failed with status ${response.status}, using mock data`);
-          return getMockData(endpoint);
-        }
-        return await response.json();
-      } catch (error) {
+      // Otherwise, throw the error
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `API request failed with status ${response.status}`);
+    } catch (error) {
+      // If we're in development or on CloudFront, use mock data for network errors
+      if ((error instanceof TypeError || (error as any).name === 'TypeError') && 
+          (process.env.NODE_ENV !== 'production' || window.location.hostname === 'd3rntcg47zepho.cloudfront.net')) {
         console.warn('API request failed, using mock data:', error);
         return getMockData(endpoint);
       }
+      
+      // Otherwise, rethrow the error
+      throw error;
     }
-    
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `API request failed with status ${response.status}`);
-    }
-    
-    return await response.json();
   } catch (error) {
     console.error(`API ${method} request to ${endpoint} failed:`, error);
     throw error;

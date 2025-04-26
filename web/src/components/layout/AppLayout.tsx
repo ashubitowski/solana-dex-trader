@@ -1,7 +1,11 @@
-import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import React, { ReactNode } from 'react';
+import { NavLink } from 'react-router-dom';
 
-const AppLayout: React.FC = () => {
+interface AppLayoutProps {
+  children: ReactNode;
+}
+
+const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
       {/* Sidebar */}
@@ -58,7 +62,7 @@ const AppLayout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-10 overflow-y-auto bg-gray-50">
-        <Outlet />
+        {children}
       </main>
     </div>
   );
