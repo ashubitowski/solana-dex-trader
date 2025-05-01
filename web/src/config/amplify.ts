@@ -7,6 +7,15 @@ export const configureAmplify = () => {
   // Get configuration from window.config (set in config.js)
   const config = (window as any).config || {};
   console.log('Loaded window.config:', config);
+  
+  // Check if config is empty and use fallback values if needed
+  if (!config.userPoolId || !config.clientId) {
+    console.warn('Config missing Cognito credentials, using fallback values');
+    // Hardcoded fallback values - same as in deploy.sh
+    config.userPoolId = config.userPoolId || 'us-east-2_2NKnlyBUD';
+    config.clientId = config.clientId || '5srq6jqjh86d55jviandg5f71a';
+    config.apiEndpoint = config.apiEndpoint || 'https://p0ovyz3y83.execute-api.us-east-2.amazonaws.com/prod/';
+  }
 
   // Configure Amplify with Cognito settings
   Amplify.configure({
