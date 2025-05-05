@@ -51,3 +51,9 @@ jobs:
       - name: CDK Deploy
         run: cdk deploy --require-approval never
         working-directory: infrastructure
+
+      - name: Sync static assets to S3
+        run: aws s3 sync web/build s3://${{ secrets.S3_BUCKET }} --delete
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_ID }} --paths '/*'

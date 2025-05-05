@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+    <script src="config.js"></script>
+    <script>
+        // Display config values
+        window.onload = function() {
+            document.getElementById('config-display').innerHTML = 
+                'Config loaded: ' + (window.config ? 'Yes' : 'No') + '<br>' +
+                'userPoolId: ' + (window.config?.userPoolId || 'Not found') + '<br>' +
+                'clientId: ' + (window.config?.clientId || 'Not found') + '<br>' +
+                'apiEndpoint: ' + (window.config?.apiEndpoint || 'Not found');
+        };
+    </script>
+</head>
+<body>
+    <h1>Test Page</h1>
+    <p>This is a simple test page to verify if the site infrastructure is working.</p>
+    <div id="config-display" style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;"></div>
+</body>
+</html>
