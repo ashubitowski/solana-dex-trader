@@ -45,13 +45,16 @@ if [ -z "${CLOUDFRONT_DISTRIBUTION_ID}" ] || [ "${CLOUDFRONT_DISTRIBUTION_ID}" =
 fi
 echo "Found CloudFront Distribution ID: ${CLOUDFRONT_DISTRIBUTION_ID}"
 
-# Sync frontend files to S3 bucket
-echo "Syncing frontend files to S3 bucket s3://${S3_BUCKET_NAME}..."
-aws s3 sync ../web-server/public s3://${S3_BUCKET_NAME}/ --delete
+# Build frontend
+echo "Building frontend..."
+cd ../web
+npm ci
+npm run build
+cd ../infrastructure
 
 # Create a configuration file for the web application
-mkdir -p ../web-server/public # Ensure directory exists
-cat > ../web-server/public/config.js << EOL
+echo "Creating web app config file..."
+cat > ../web/build/config.js << EOL
 window.config = {
   userPoolId: '${USER_POOL_ID}',
   clientId: '${USER_POOL_CLIENT_ID}',
@@ -59,6 +62,10 @@ window.config = {
   websiteUrl: 'https://${CLOUDFRONT_DOMAIN}'
 };
 EOL
+
+# Sync frontend files to S3 bucket
+echo "Syncing frontend files to S3 bucket s3://${S3_BUCKET_NAME}..."
+aws s3 sync ../web/build s3://${S3_BUCKET_NAME}/ --delete
 
 # Invalidate CloudFront cache
 echo "Invalidating CloudFront cache..."
