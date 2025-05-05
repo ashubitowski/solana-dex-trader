@@ -52,6 +52,17 @@ jobs:
         run: cdk deploy --require-approval never
         working-directory: infrastructure
 
+      - name: Validate deployment secrets
+        run: |
+          if [ -z "${{ secrets.S3_BUCKET }}" ]; then
+            echo "Error: S3_BUCKET secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CLOUDFRONT_ID }}" ]; then
+            echo "Error: CLOUDFRONT_ID secret is not set"
+            exit 1
+          fi
+
       - name: Sync static assets to S3
         run: aws s3 sync web/build s3://${{ secrets.S3_BUCKET }} --delete
 
